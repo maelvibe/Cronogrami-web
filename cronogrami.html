@@ -878,8 +878,8 @@ function renderHolidayList() {
     return `<div class="hm-item">
       <div class="hm-dot"></div>
       <div class="hm-date">${label}</div>
-      <div class="hm-name">${h.name}</div>
-      <button class="hm-del" onclick="deleteHoliday('${h.id}')" title="Eliminar">×</button>
+      <div class="hm-name">${esc(String(h.name||''))}</div>
+      <button class="hm-del" data-id="${esc(String(h.id)).replace(/"/g,'&quot;')}" onclick="deleteHoliday(this.dataset.id)" title="Eliminar">×</button>
     </div>`;
   }).join('');
 }
@@ -1068,8 +1068,31 @@ function getPhases() {
 }
 function getHolidays() {
   if (!state.project) return [];
-  if (!state.project.holidays) state.project.holidays = [];
-  return state.project.holidays;
+  if (!Array.isArray(state.project.holidays)) state.project.holidays = [];
+  const hs = state.project.holidays;
+  // Legacy format: plain "YYYY-MM-DD" strings → {id,date,name}; drop entries without a valid date
+  for (let i = hs.length - 1; i >= 0; i--) {
+    let h = hs[i];
+    if (typeof h === 'string') h = hs[i] = { id: 'h_' + h + '_' + i, date: h, name: '' };
+    if (!h || typeof h.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(h.date)) { hs.splice(i, 1); continue; }
+    if (h.id == null) h.id = 'h_' + h.date + '_' + i;
+  }
+  return hs;
+}
+// Concrete holiday dates within the chart range (recurring holidays repeat every year)
+function getHolidayDatesInRange() {
+  const out = [];
+  if (!state.chartStart || !state.chartEnd) return out;
+  const y0 = state.chartStart.getFullYear(), y1 = state.chartEnd.getFullYear();
+  getHolidays().forEach(h => {
+    const hd = parseDate(h.date); if (!hd) return;
+    const dates = h.recurring
+      ? Array.from({length: y1 - y0 + 1}, (_, k) => new Date(y0 + k, hd.getMonth(), hd.getDate()))
+          .filter(d => d.getMonth() === hd.getMonth())
+      : [hd];
+    dates.forEach(d => { if (d >= state.chartStart && d <= state.chartEnd) out.push(d); });
+  });
+  return out;
 }
 
 function openPhaseModal() {
@@ -1343,11 +1366,10 @@ function renderRuler() {
     drawYearLabels(ctx, w, 0, 22); drawMonthFull(ctx, w, 22, 30);
   }
   // ── Holiday markers in ruler (◆ above phase band) ──────────
-  const rulerHolidays = getHolidays();
+  const rulerHolidays = getHolidayDatesInRange();
   if (rulerHolidays.length) {
     const rulerLabelH = HEADER_H - PHASE_H; // 52
-    rulerHolidays.forEach(h => {
-      const hd = parseDate(h.date); if (!hd) return;
+    rulerHolidays.forEach(hd => {
       const hx = dateToX(hd) + state.pxPerDay / 2;
       if (hx < 0 || hx > w) return;
       const my = rulerLabelH - 7;
@@ -1528,11 +1550,10 @@ function renderGantt() {
     }
   }
   // Holiday columns
-  const holidays = getHolidays();
+  const holidays = getHolidayDatesInRange();
   if (holidays.length) {
     const totalDaysH = diffDays(state.chartStart, state.chartEnd);
-    holidays.forEach(h => {
-      const hd = parseDate(h.date); if (!hd) return;
+    holidays.forEach(hd => {
       const idx = diffDays(state.chartStart, hd);
       if (idx < 0 || idx > totalDaysH) return;
       const hx = idx * pxd;
