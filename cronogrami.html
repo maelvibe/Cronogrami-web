@@ -329,6 +329,9 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
   width:15px;height:15px;accent-color:var(--accent);cursor:pointer;
   flex-shrink:0;
 }
+.m-checkbox-row.disabled{opacity:.45;cursor:default}
+.m-checkbox-row.disabled input[type=checkbox]{cursor:default}
+.m-golive-hint{font-size:11px;color:var(--fg3);line-height:1.4;margin-left:23px}
 .m-range-row{display:flex;align-items:center;gap:10px}
 .m-range-row input[type=range]{flex:1;accent-color:var(--accent);cursor:pointer}
 .m-range-val{
@@ -777,6 +780,13 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
       <div class="m-field">
         <div class="m-label">Color</div>
         <div id="color-swatches"></div>
+      </div>
+      <div class="m-field">
+        <label class="m-checkbox-row" id="m-golive-row">
+          <input type="checkbox" id="m-golive">
+          <span>🏁 Marcar como Go Live (el fin de esta tarea es la salida a producción)</span>
+        </label>
+        <div class="m-golive-hint" id="m-golive-hint" hidden></div>
       </div>
       <div id="m-parent-info" class="m-parent-info" hidden></div>
     </div>
@@ -1753,7 +1763,8 @@ function importXLSX(file) {
         dependencies: [], isMilestone,
         notes: String(f.notes ?? '').trim(),
       };
-      if (isTruthyCell(f.goLive)) task.isGoLive = true;
+      // Only one Go Live per project: later rows marked "Go Live" are ignored
+      if (isTruthyCell(f.goLive) && !getGoLiveTask()) task.isGoLive = true;
       if (sprint) task.sprintId = sprint.id;
       state.project.tasks.push(task);
       imported.push({ task, f });
@@ -2358,6 +2369,10 @@ function computeOverdue() {
   tasks.forEach(walk);
   return overdue;
 }
+// The task marked Go Live (at most one per project), skipping exceptId
+function getGoLiveTask(exceptId) {
+  return ((state.project && state.project.tasks) || []).find(t => t.isGoLive && t.id !== exceptId) || null;
+}
 function isOverdue(task) { return !!(state.overdue && state.overdue.has(task.id)); }
 
 // Project summary figures. % de avance: progress of the leaf tasks (milestones aside)
@@ -2385,6 +2400,7 @@ function computeProjectSummary() {
       .sort((a, b) => a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0)
       .slice(0, 3),
     endDate: ends.length ? ends[ends.length - 1] : null,
+    goLive: getGoLiveTask(),
     today,
   };
 }
@@ -2409,10 +2425,10 @@ function renderProjectHead() {
     tiles += tile('Completadas', `${s.done} <small>de ${s.total}</small>`);
     tiles += tile('En curso', s.inProgress);
     tiles += tile('Vencidas', s.overdue, s.overdue ? 'danger' : '');
-    if (s.endDate) {
-      const left = diffDays(parseDate(s.today), parseDate(s.endDate));
-      tiles += tile('Fin previsto', `${short(s.endDate)} <small>${left > 0 ? 'faltan ' + left + ' días' : left === 0 ? 'hoy' : 'hace ' + (-left) + ' días'}</small>`);
-    }
+    const until = iso => { const d = diffDays(parseDate(s.today), parseDate(iso)); return d > 0 ? 'faltan ' + d + ' días' : d === 0 ? 'hoy' : 'hace ' + (-d) + ' días'; };
+    const glEnd = s.goLive && getBarDates(s.goLive).endDate;
+    if (glEnd) tiles += tile('🏁 Go Live', `${short(glEnd)} <small>${until(glEnd)}</small>`);
+    if (s.endDate) tiles += tile('Fin previsto', `${short(s.endDate)} <small>${until(s.endDate)}</small>`);
     tiles += `<div class="ph-tile hitos"><div class="k">Próximos hitos</div>${s.nextMilestones.length
       ? s.nextMilestones.map(m => `<div class="ph-hito" title="${escAttr(m.name)}"><b>${short(m.startDate)}</b>${esc(m.name)}</div>`).join('')
       : '<div class="ph-hito">Sin hitos pendientes</div>'}</div>`;
@@ -3484,6 +3500,17 @@ function openModal(taskId) {
   }
   document.getElementById('m-milestone').checked = !!task.isMilestone;
   document.getElementById('m-notes').value = task.notes || '';
+  // Go Live: one task per project, so the option is disabled while another task has it
+  const otherGoLive = getGoLiveTask(modalEditId);
+  const goLiveCb = document.getElementById('m-golive');
+  goLiveCb.checked = !otherGoLive && !!task.isGoLive;
+  goLiveCb.disabled = !!otherGoLive;
+  document.getElementById('m-golive-row').classList.toggle('disabled', !!otherGoLive);
+  const goLiveHint = document.getElementById('m-golive-hint');
+  goLiveHint.hidden = !otherGoLive;
+  goLiveHint.textContent = otherGoLive
+    ? `Ya está marcada como Go Live la tarea ${otherGoLive.taskNum ?? ''} «${otherGoLive.name}». Desmarcala ahí para elegir otra.`
+    : '';
   // Sprint (field only shown when the project has sprints)
   const sprintsForModal = getSprintsSorted();
   document.getElementById('m-sprint-field').hidden = sprintsForModal.length === 0;
@@ -3551,6 +3578,7 @@ function saveModal() {
   }
 
   const notes = document.getElementById('m-notes').value.trim();
+  const isGoLive = document.getElementById('m-golive').checked && !getGoLiveTask(modalEditId);
   const sprintId = getSprints().length ? (document.getElementById('m-sprint').value || null) : null;
   let pullAsk = null;
 
@@ -3564,6 +3592,7 @@ function saveModal() {
     task.duration = duration; task.progress = progress;
     task.responsible = responsible; task.assigneeIds = assigneeIds; task.color = modalColor; task.isMilestone = isMilestone;
     task.notes = notes;
+    if (isGoLive) task.isGoLive = true; else delete task.isGoLive;
     const selectedDepIds = new Set();
     document.querySelectorAll('#m-deps-wrap input[type=checkbox]').forEach(cb => { if (cb.checked) selectedDepIds.add(cb.dataset.id); });
     task.dependencies = Array.from(selectedDepIds);
@@ -3586,6 +3615,7 @@ function saveModal() {
       taskNum: 0, name, startDate, endDate, duration, progress,
       responsible, assigneeIds, color: modalColor, parentId, dependencies: [], isMilestone, sprintId, notes
     };
+    if (isGoLive) newTask.isGoLive = true;
     state.project.tasks.push(newTask);
     state.selectedId = newTask.id;
     if (parentId) state.expanded.add(parentId);
