@@ -110,11 +110,21 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 .ch-sprint,.tr-sprint{width:40px;text-align:center;flex-shrink:0;display:none}
 #left-panel.show-sprint-col .ch-sprint,#left-panel.show-sprint-col .tr-sprint{display:block}
 .tr-sprint{font-size:10px;color:var(--fg3);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
-#sprint-filter{position:absolute;top:8px;left:8px;max-width:calc(100% - 16px);
+#list-tools{position:absolute;top:8px;left:8px;right:8px;display:flex;gap:6px;align-items:center}
+#sprint-filter{flex-shrink:0;max-width:50%;
   background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg2);
   font-family:inherit;font-size:11px;padding:3px 6px;outline:none;color-scheme:dark;cursor:pointer}
 #sprint-filter:focus{border-color:var(--accent)}
 #sprint-filter.active{border-color:var(--accent);color:var(--accent)}
+.search-wrap{position:relative;flex:1;min-width:0}
+#task-search{width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:6px;
+  color:var(--fg);font-family:inherit;font-size:11px;padding:3px 20px 3px 7px;outline:none}
+#task-search:focus{border-color:var(--accent)}
+#task-search-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);cursor:pointer;
+  color:var(--fg3);font-size:13px;line-height:1;user-select:none}
+#task-search-clear:hover{color:var(--fg)}
+.search-hl{background:#fef08a;color:#1e293b;border-radius:2px}
+.tr-ancestor-only{opacity:0.5}
 #task-scroll{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
 #task-scroll::-webkit-scrollbar{width:6px}
 #task-scroll::-webkit-scrollbar-track{background:transparent}
@@ -194,6 +204,10 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
   transition:background .1s;z-index:10;
 }
 #resize-handle:hover,#resize-handle.dragging{background:var(--accent)}
+
+/* ── GANTT COLLAPSED (list only) ─────────────────────────── */
+#app-body.gantt-collapsed .gantt-area{display:none}
+#app-body.gantt-collapsed #left-panel{flex:1 1 auto;max-width:100%;border-right:none}
 
 /* ── EMPTY STATE ─────────────────────────────────────────── */
 #empty-state{
@@ -588,13 +602,22 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
     <button class="zoom-btn" onclick="zoom(-1)">−</button>
     <button class="zoom-btn" onclick="zoom(+1)">+</button>
   </div>
+
+  <div class="tb-sep"></div>
+  <button class="zoom-btn" id="gantt-toggle-btn" onclick="toggleGanttCollapsed()" title="Ocultar Gantt" aria-label="Ocultar Gantt">⊟</button>
 </div>
 
 <!-- ── APP BODY ──────────────────────────────────────────── -->
 <div id="app-body">
   <div id="left-panel" style="width:420px">
     <div id="col-header">
-      <select id="sprint-filter" hidden onchange="setSprintFilter(this.value)" title="Filtrar por sprint"></select>
+      <div id="list-tools">
+        <div class="search-wrap">
+          <input type="text" id="task-search" placeholder="Buscar tarea..." autocomplete="off" spellcheck="false">
+          <span id="task-search-clear" title="Limpiar búsqueda" hidden>×</span>
+        </div>
+        <select id="sprint-filter" hidden onchange="setSprintFilter(this.value)" title="Filtrar por sprint"></select>
+      </div>
       <div class="ch ch-num">#</div>
       <div class="ch ch-name">Nombre</div>
       <div class="ch ch-start">Inicio</div>
@@ -605,8 +628,8 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
     </div>
     <div id="task-scroll"></div>
   </div>
-  <div id="resize-handle"></div>
-  <div id="gantt-panel">
+  <div id="resize-handle" class="gantt-area"></div>
+  <div id="gantt-panel" class="gantt-area">
     <div id="ruler-wrap"><canvas id="ruler-canvas" height="52"></canvas></div>
     <div id="gantt-wrap">
       <canvas id="gantt-canvas"></canvas>
@@ -973,6 +996,8 @@ let state = {
   sprintFilter: '',      // sprint id shown alone in the list/gantt ('' = all)
   showSprintCol: true,   // "Sprint" column in the task list (only when sprints exist)
   listBaseWidth: 420,    // task list width without the Sprint column (user-resizable)
+  ganttCollapsed: false, // gantt hidden, task list takes the full width (saved in .cronogrami)
+  searchQuery: '',       // task name filter for the list/gantt (not saved)
 };
 
 const VIEW_PX = { day: 28, week: 22, month: 8 };
@@ -2029,12 +2054,37 @@ function buildFlat() {
       children[t.parentId].push(t);
     } else roots.push(t);
   });
+  // Search: tasks whose name matches, plus their ancestors (for context)
+  const q = state.searchQuery.toLowerCase();
+  let matchSet = null, ancestorSet = null;
+  if (q) {
+    matchSet = new Set(tasks.filter(t => (t.name || '').toLowerCase().includes(q)).map(t => t.id));
+    ancestorSet = new Set();
+    matchSet.forEach(id => {
+      let p = byId[id].parentId;
+      while (p && byId[p] && !ancestorSet.has(p)) { ancestorSet.add(p); p = byId[p].parentId; }
+    });
+  }
   // Sprint filter: only that sprint's tasks, as a flat list (parents usually aren't in a sprint)
   if (state.sprintFilter) {
-    return tasks.filter(t => t.sprintId === state.sprintFilter)
-      .map(task => ({ task, depth: 0, hasKids: false }));
+    return tasks.filter(t => t.sprintId === state.sprintFilter && (!matchSet || matchSet.has(t.id)))
+      .map(task => ({ task, depth: 0, hasKids: false, searchMatch: !!matchSet }));
   }
   const flat = [];
+  if (matchSet) {
+    // Search mode ignores collapsed state so matches inside closed parents are shown
+    const visible = id => matchSet.has(id) || ancestorSet.has(id);
+    (function walkSearch(list, depth) {
+      for (const task of list) {
+        if (!visible(task.id)) continue;
+        const kids = (children[task.id] || []).filter(c => visible(c.id));
+        flat.push({ task, depth, hasKids: kids.length > 0, forceOpen: true,
+                    searchMatch: matchSet.has(task.id), ancestorOnly: !matchSet.has(task.id) });
+        walkSearch(kids, depth + 1);
+      }
+    })(roots, 0);
+    return flat;
+  }
   function walk(task, depth) {
     const hasKids = (children[task.id]||[]).length > 0;
     flat.push({ task, depth, hasKids });
@@ -2077,11 +2127,11 @@ function renderLeft() {
   const rows = state.flat;
   if (!rows.length) { scroll.innerHTML = ''; return; }
   let html = '';
-  rows.forEach(({task, depth, hasKids}) => {
-    const sel = task.id === state.selectedId ? ' selected' : '';
+  rows.forEach(({task, depth, hasKids, forceOpen, searchMatch, ancestorOnly}) => {
+    const sel = (task.id === state.selectedId ? ' selected' : '') + (ancestorOnly ? ' tr-ancestor-only' : '');
     const nameClass = task.parentId == null ? ' phase' : (task.isMilestone ? ' milestone' : '');
     const indent = depth * 14;
-    const isOpen = state.expanded.has(task.id);
+    const isOpen = forceOpen || state.expanded.has(task.id);
     const s = fmtShort(parseDate(task.startDate));
     const e = fmtShort(parseDate(task.endDate));
     const dur = task.isMilestone ? '—' : (task.duration || '');
@@ -2118,7 +2168,7 @@ function renderLeft() {
         <div class="tr-indent" style="width:${indent}px"></div>
         ${toggleHtml}${msIcon}${glIcon}
         ${!task.isMilestone?`<div class="tr-color-dot" style="background:${dotColor}"></div>`:''}
-        <div class="tr-name${nameClass}" title="${escAttr(task.name)}">${esc(task.name)}</div>
+        <div class="tr-name${nameClass}" title="${escAttr(task.name)}">${searchMatch ? highlightMatch(task.name, state.searchQuery) : esc(task.name)}</div>
       </div>
       <div class="tr-date w74">${s}</div>
       <div class="tr-date w42">${dur}</div>
@@ -2133,6 +2183,13 @@ function renderLeft() {
 
 function esc(s) {
   return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+// Escaped text with every case-insensitive occurrence of q wrapped in <mark class="search-hl">
+function highlightMatch(text, q) {
+  if (!q) return esc(text);
+  const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  return (text||'').split(re).map((part, i) =>
+    i % 2 ? `<mark class="search-hl">${esc(part)}</mark>` : esc(part)).join('');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3086,6 +3143,19 @@ function setupProjectNameEdit() {
 // ═══════════════════════════════════════════════════════════
 function setupKeyboard() {
   document.addEventListener('keydown', e => {
+    const searchInput = document.getElementById('task-search');
+    // Ctrl+F: focus the task search (unless typing in another field)
+    if (e.ctrlKey && !e.altKey && !e.metaKey && (e.key==='f'||e.key==='F')
+        && document.getElementById('modal-overlay').hidden) {
+      const tag = document.activeElement.tagName;
+      if (tag!=='INPUT' && tag!=='TEXTAREA' && tag!=='SELECT' && document.activeElement.contentEditable!=='true') {
+        e.preventDefault(); searchInput.focus(); searchInput.select(); return;
+      }
+    }
+    // Escape in the search field: clear it and leave the field
+    if (e.key==='Escape' && document.activeElement === searchInput) {
+      clearTaskSearch(); searchInput.blur(); e.preventDefault(); return;
+    }
     // Escape: close modal
     if (e.key==='Escape') {
       if (!document.getElementById('modal-overlay').hidden) {
@@ -3136,6 +3206,7 @@ async function saveProject() {
     ...state.project,
     viewMode: state.view,
     pxPerDay: state.pxPerDay,
+    ganttCollapsed: state.ganttCollapsed,
   };
   const json = JSON.stringify(projectToSave, null, 2);
   const filename = asciiFileBase(state.project.project_name) + '.cronogrami';
@@ -3173,6 +3244,8 @@ function loadProject(data, filename) {
     state.pxPerDay = data.pxPerDay;
   }
   state.sprintFilter = '';
+  state.ganttCollapsed = data.ganttCollapsed === true;
+  applyGanttCollapsed(false); // layout only; rendered below
   setProjectNameDisplay(data.project_name || data.projectName || filename || 'Proyecto sin nombre');
   state.expanded.clear();
   // 3. `expanded` field on tasks (Python) → state.expanded Set (web)
@@ -3208,6 +3281,50 @@ function scrollToToday() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// GANTT VISIBILITY
+// ═══════════════════════════════════════════════════════════
+function toggleGanttCollapsed() {
+  state.ganttCollapsed = !state.ganttCollapsed;
+  applyGanttCollapsed();
+}
+function applyGanttCollapsed(render = true) {
+  const collapsed = !!state.ganttCollapsed;
+  document.getElementById('app-body').classList.toggle('gantt-collapsed', collapsed);
+  const btn = document.getElementById('gantt-toggle-btn');
+  const label = collapsed ? 'Mostrar Gantt' : 'Ocultar Gantt';
+  btn.textContent = collapsed ? '⊞' : '⊟';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+  if (render) rebuildAndRender(false);
+}
+
+// ═══════════════════════════════════════════════════════════
+// TASK SEARCH
+// ═══════════════════════════════════════════════════════════
+function setSearchQuery(q) {
+  state.searchQuery = (q || '').trim();
+  rebuildAndRender(false);
+}
+function clearTaskSearch() {
+  const input = document.getElementById('task-search');
+  clearTimeout(searchTimer);
+  input.value = '';
+  document.getElementById('task-search-clear').hidden = true;
+  if (state.searchQuery) setSearchQuery('');
+}
+let searchTimer;
+function setupSearch() {
+  const input = document.getElementById('task-search');
+  const clear = document.getElementById('task-search-clear');
+  input.addEventListener('input', () => {
+    clear.hidden = !input.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => setSearchQuery(input.value), 150);
+  });
+  clear.addEventListener('click', () => { clearTaskSearch(); input.focus(); });
+}
+
+// ═══════════════════════════════════════════════════════════
 // MAIN RENDER CYCLE
 // ═══════════════════════════════════════════════════════════
 function rebuildAndRender(scrollTodayOnLoad) {
@@ -3236,6 +3353,7 @@ setupResize();
 setupModal();
 setupProjectNameEdit();
 setupKeyboard();
+setupSearch();
 initColorSwatches();
 loadProject(DEMO, 'demo.cronogrami');
 </script>
