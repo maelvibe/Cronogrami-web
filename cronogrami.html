@@ -1045,6 +1045,10 @@ function addDays(d, n) {
 function diffDays(a, b) {
   return Math.round((b - a) / 86400000);
 }
+function addDaysToDate(dateStr, n) {
+  const d = parseDate(dateStr);
+  return d ? fmtDate(addDays(d, n)) : dateStr;
+}
 const MONTHS_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const MONTHS_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -2108,6 +2112,39 @@ function getBarDates(task) {
   return r || { startDate: task.startDate, endDate: task.endDate };
 }
 
+// Forward-only date cascade: pushes successors (BFS over dependencies[]) so each
+// one starts the day after its predecessor ends. Successors that already start
+// later are left alone. Returns how many tasks were moved.
+function cascadeDependencies(changedTaskId, tasks) {
+  const taskMap = {};
+  tasks.forEach(t => taskMap[t.id] = t);
+  const queue = [changedTaskId];
+  const visited = new Set();
+  const moved = new Set();
+  while (queue.length) {
+    const predId = queue.shift();
+    if (visited.has(predId)) continue;
+    visited.add(predId);
+    if (visited.size > tasks.length) { console.warn('Circular dependency detected'); break; }
+    const pred = taskMap[predId];
+    if (!pred || !pred.endDate) continue;
+    const newStart = addDaysToDate(pred.endDate, 1);
+    tasks.forEach(task => {
+      if (!(task.dependencies || []).includes(predId)) return;
+      if (task.startDate && newStart <= task.startDate) return;
+      // Keep the task's calendar span (end - start) so weekends inside it are preserved
+      const span = (task.startDate && task.endDate)
+        ? diffDays(parseDate(task.startDate), parseDate(task.endDate))
+        : Math.max(0, (task.durationDays ?? task.duration ?? 1) - 1);
+      task.startDate = newStart;
+      task.endDate = task.isMilestone ? newStart : addDaysToDate(newStart, Math.max(0, span));
+      moved.add(task.id);
+      queue.push(task.id);
+    });
+  }
+  return moved.size;
+}
+
 function renumberTasks() {
   if (!state.project) return;
   const tasks = state.project.tasks;
@@ -3120,9 +3157,14 @@ function saveModal() {
     const task = getTaskById(modalEditId);
     if (!task) { closeModal(); return; }
     if (getSprints().length) task.sprintId = sprintId;
+    const prevEndDate = task.endDate;
     task.name = name; task.startDate = startDate; task.endDate = endDate;
     task.duration = duration; task.progress = progress;
     task.responsible = responsible; task.assigneeIds = assigneeIds; task.color = modalColor; task.isMilestone = isMilestone;
+    if (prevEndDate && endDate > prevEndDate) {
+      const n = cascadeDependencies(task.id, state.project.tasks);
+      if (n > 0) showToast(`${n} ${n === 1 ? 'tarea actualizada' : 'tareas actualizadas'} por dependencia`);
+    }
   } else {
     let parentId = null;
     if (state.selectedId) {
@@ -3141,7 +3183,7 @@ function saveModal() {
 
   renumberTasks();
   closeModal();
-  rebuildAndRender();
+  rebuildAndRender(false);
 }
 
 function showDeleteConfirm() {
