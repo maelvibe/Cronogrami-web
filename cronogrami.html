@@ -954,7 +954,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<!-- NOTA PARA PUBLICAR: este archivo necesita capabilities: { downloads: true } al publicarse como artifact de Claude -->
+<!-- NOTA PARA PUBLICAR: este archivo necesita capabilities: { downloads: true } al publicarse como artifact de Claude. Sin eso, Exportar y Guardar muestran un aviso en vez de descargar. -->
 <script>
 // ═══════════════════════════════════════════════════════════
 // STATE
@@ -1195,25 +1195,33 @@ function exportBaseName() {
 function isClaudeArtifact() {
   return !!(window.__claudeArtifact__ || location.hostname.includes('claude.ai') || window.claude);
 }
-// Saves a generated file. Inside a Claude artifact published with capabilities
-// { downloads: true } it goes through the platform's downloads API (the sandbox
-// blocks <a download>); otherwise it falls back to a regular link download.
+// Saves a generated file. Inside a Claude artifact it goes through the platform's
+// downloads API (published with capabilities { downloads: true }); the sandbox blocks
+// <a download> there, so a failure is reported instead of silently falling back.
+// Outside an artifact (file://, local server) it uses a regular link download.
 async function triggerDownload(filename, blob) {
-  // use('downloads') resolves null when the artifact wasn't published with that capability
   if (isClaudeArtifact() && typeof window.claude?.use === 'function') {
+    // use('downloads') resolves null when the artifact wasn't published with that capability
     let downloads = null;
-    try { downloads = await window.claude.use('downloads'); } catch (e) { /* fallback */ }
-    if (downloads) {
-      try {
-        await downloads.save({ filename, data: blob });
-        return;
-      } catch (err) {
+    try { downloads = await window.claude.use('downloads'); } catch (e) { /* treated as unavailable */ }
+    if (!downloads) throw new Error('Las descargas no están habilitadas en esta vista.');
+    try {
+      await downloads.save({ filename, data: blob });
+    } catch (err) {
+      const ext = '.' + filename.split('.').pop();
+      switch (err?.code) {
         // The viewer said no: respect it instead of forcing another download
-        if (err?.code === 'declined') return;
-        if (err?.code === 'rate_limited') throw new Error('Ya hay una descarga pendiente de confirmar.');
-        console.warn('downloads.save failed, using link fallback', err);
+        case 'declined': return;
+        case 'rate_limited': throw new Error('Ya hay una descarga pendiente de confirmar.');
+        case 'rejected_extension':
+        case 'extension_not_enabled': throw new Error('El formato ' + ext + ' no se puede descargar en esta vista.');
+        case 'too_large': throw new Error('El archivo es demasiado grande para descargarlo aquí.');
+        default:
+          console.warn('downloads.save failed', err);
+          throw new Error('La descarga no está disponible en esta vista.');
       }
     }
+    return;
   }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -3138,7 +3146,10 @@ async function saveProject() {
     pxPerDay: state.pxPerDay,
   };
   const json = JSON.stringify(projectToSave, null, 2);
-  const filename = asciiFileBase(state.project.project_name) + '.cronogrami';
+  // The Claude downloads API only accepts known extensions, so inside an artifact the
+  // file is saved as .cronogrami.json (the open dialog accepts both)
+  const filename = asciiFileBase(state.project.project_name)
+    + (isClaudeArtifact() ? '.cronogrami.json' : '.cronogrami');
   // Claude downloads API inside an artifact; plain <a download> otherwise (file://, local server)
   try {
     await triggerDownload(filename, new Blob([json], { type: 'application/json' }));
