@@ -370,6 +370,10 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 .tm-swatch.active{border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.4);transform:scale(1.1)}
 
 /* ── ASSIGNEE PICKER ─────────────────────────────────────── */
+#m-deps-wrap{max-height:148px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 0}
+#m-deps-wrap::-webkit-scrollbar{width:4px}
+#m-deps-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+#m-deps-wrap .assignee-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #m-assignees-wrap{max-height:148px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 0}
 #m-assignees-wrap::-webkit-scrollbar{width:4px}
 #m-assignees-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
@@ -703,6 +707,10 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
         <div class="m-label">Responsable</div>
         <div id="m-assignees-wrap" hidden></div>
         <input type="text" id="m-resp" class="m-input" autocomplete="off" placeholder="Nombre del responsable">
+      </div>
+      <div class="m-field" id="m-deps-field" hidden>
+        <div class="m-label">Depende de</div>
+        <div id="m-deps-wrap"></div>
       </div>
       <div class="m-field" id="m-sprint-field" hidden>
         <div class="m-label">Sprint</div>
@@ -1106,6 +1114,23 @@ let teamMemberColor = TEAM_COLORS[0];
 // ═══════════════════════════════════════════════════════════
 // ASSIGNEE PICKER (in task modal)
 // ═══════════════════════════════════════════════════════════
+// Dependency picker: every task except the one being edited and its descendants.
+function renderDependencyPicker(taskId, selectedIds) {
+  const wrap = document.getElementById('m-deps-wrap');
+  const excluded = new Set([taskId, ...getAllDescendants(taskId)]);
+  const opts = (state.project?.tasks || [])
+    .filter(t => !excluded.has(t.id))
+    .sort((a, b) => (a.taskNum || 0) - (b.taskNum || 0));
+  wrap.innerHTML = opts.length ? opts.map(t => {
+    const checked = selectedIds.includes(t.id) ? 'checked' : '';
+    const label = '#' + t.taskNum + ' — ' + t.name;
+    return `<label class="assignee-row" title="${escAttr(label)}">
+      <input type="checkbox" data-id="${escAttr(t.id)}" ${checked}>
+      <span class="assignee-name">${esc(label)}</span>
+    </label>`;
+  }).join('') : '<div class="assignee-row" style="cursor:default;color:var(--fg3)">No hay otras tareas</div>';
+}
+
 function renderAssigneePicker(selectedIds) {
   const wrap = document.getElementById('m-assignees-wrap');
   const team = getTeam();
@@ -2374,7 +2399,7 @@ function renderLeft() {
   rows.forEach(({task, depth, hasKids, forceOpen, searchMatch, ancestorOnly}) => {
     const sel = (task.id === state.selectedId ? ' selected' : '') + (ancestorOnly ? ' tr-ancestor-only' : '');
     const nameClass = task.parentId == null ? ' phase' : (task.isMilestone ? ' milestone' : '');
-    const indent = depth * 14;
+    const indent = depth * 24;
     const isOpen = forceOpen || state.expanded.has(task.id);
     const bd = getBarDates(task);
     const s = fmtShort(parseDate(bd.startDate));
@@ -3208,6 +3233,10 @@ function openModal(taskId) {
     sprintsForModal.map(sp => `<option value="${escAttr(sp.id)}">${sprintOptionLabel(sp)}</option>`).join('');
   document.getElementById('m-sprint').value = (task.sprintId && getSprintById(task.sprintId)) ? task.sprintId : '';
 
+  // Dependencies (edit mode only; new tasks start with dependencies: [])
+  document.getElementById('m-deps-field').hidden = !modalEditId;
+  if (modalEditId) renderDependencyPicker(modalEditId, task.dependencies || []);
+
   selectModalColor(task.color || '#3b82f6');
   updateMilestoneFields(!!task.isMilestone);
 
@@ -3275,6 +3304,9 @@ function saveModal() {
     task.name = name; task.startDate = startDate; task.endDate = endDate;
     task.duration = duration; task.progress = progress;
     task.responsible = responsible; task.assigneeIds = assigneeIds; task.color = modalColor; task.isMilestone = isMilestone;
+    const selectedDepIds = new Set();
+    document.querySelectorAll('#m-deps-wrap input[type=checkbox]').forEach(cb => { if (cb.checked) selectedDepIds.add(cb.dataset.id); });
+    task.dependencies = Array.from(selectedDepIds);
     if (prevEndDate && endDate > prevEndDate) {
       const n = cascadeDependencies(task.id, state.project.tasks);
       if (n > 0) showToast(`${n} ${n === 1 ? 'tarea actualizada' : 'tareas actualizadas'} por dependencia`);
