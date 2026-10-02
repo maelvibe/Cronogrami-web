@@ -71,8 +71,20 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 .tb-btn.accent:hover{background:#96da1a}
 .tb-btn svg{flex-shrink:0}
 .tb-btn:disabled{opacity:.35;cursor:default;background:transparent;color:var(--fg2)}
-/* Narrow screens: configuration buttons show only their icon (tooltip via title) */
-@media (max-width:1499px){ .tb-btn.tb-compact .tb-label{display:none} }
+/* "Proyecto" / "Calendario" menus: dropdowns of actions (open a modal) */
+.tb-menu-wrap{position:relative}
+.tb-menu{
+  position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:170px;
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;flex-direction:column;
+}
+.tb-menu[hidden]{display:none}
+.tb-menu-item{
+  display:flex;align-items:center;gap:8px;padding:7px 8px;border:none;border-radius:5px;
+  background:transparent;color:var(--fg2);font-size:12px;font-family:inherit;text-align:left;cursor:pointer;
+}
+.tb-menu-item:hover,.tb-menu-item:focus-visible{background:var(--surface2);color:var(--fg);outline:none}
+.tb-menu-item svg{flex-shrink:0}
 /* "Vista" menu: display options, one checkbox per VIEW_OPTIONS entry */
 #view-menu-wrap{position:relative}
 #view-menu{
@@ -570,6 +582,34 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .hm-input:focus{border-color:var(--accent)}
 .hm-footer{display:flex;align-items:center;padding:10px 16px 14px;
   border-top:1px solid var(--border2);gap:8px}
+/* ── Incident modal (reuses the holiday modal shell) ── */
+.im-panel{width:600px}
+.im-list{max-height:340px}
+.im-filter{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.im-filter button{padding:3px 9px;border:none;background:transparent;color:var(--fg2);font-size:11px;font-family:inherit;cursor:pointer}
+.im-filter button:hover{background:var(--surface2);color:var(--fg)}
+.im-filter button.active{background:var(--surface2);color:var(--fg);font-weight:600}
+.im-item{display:flex;align-items:flex-start;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border2)}
+.im-item:last-child{border-bottom:none}
+.im-item.resolved .im-title{color:var(--fg2);text-decoration:line-through}
+.im-sev{flex-shrink:0;width:58px;text-align:center;padding:2px 0;border-radius:4px;
+  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:#fff;margin-top:1px}
+.im-body{flex:1;min-width:0}
+.im-title{font-size:13px;color:var(--fg);overflow-wrap:anywhere}
+.im-desc{font-size:11.5px;color:var(--fg2);margin-top:2px;white-space:pre-wrap;overflow-wrap:anywhere}
+.im-meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--fg3);margin-top:4px}
+.im-status{color:var(--fg2)}
+.im-status.st-abierto{color:#f87171}
+.im-status.st-en_seguimiento{color:#fbbf24}
+.im-status.st-resuelto{color:var(--accent)}
+.im-actions{display:flex;gap:4px;flex-shrink:0;align-items:center}
+.im-resolve{padding:3px 8px;font-size:11px}
+.im-empty{text-align:center;padding:20px 0;color:var(--fg2);font-size:12px}
+.im-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.im-span2{grid-column:span 2}
+.im-grid textarea{resize:vertical;font-family:inherit}
+/* ⚠ next to a task name in the list when it has unresolved incidents */
+.tr-incident{color:#ea580c;font-size:11px;margin-right:4px;flex-shrink:0;cursor:help}
 /* ── Client modal ── */
 .cl-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;
   display:none;align-items:center;justify-content:center}
@@ -651,26 +691,6 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13 11v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     Guardar
   </button>
-  <button class="tb-btn tb-compact" onclick="openTeamModal()" title="Equipo">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="5" r="2.3" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 13c0-2.2 2-4 4.5-4s4.5 1.8 4.5 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="11.5" cy="5" r="1.8" stroke="currentColor" stroke-width="1.3"/><path d="M13.5 12.5c0-1.5-1.1-2.75-2.5-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-    <span class="tb-label">Equipo</span>
-  </button>
-  <button class="tb-btn tb-compact" onclick="openPhasesModal()" title="Fases">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M6 4V3M10 4V3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5 8h2M9 8h2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-    <span class="tb-label">Fases</span>
-  </button>
-  <button class="tb-btn tb-compact" onclick="openHolidayModal()" title="Feriados">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 2v2M11 2v2M2 7h12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11" r="1.5" fill="#ef4444"/></svg>
-    <span class="tb-label">Feriados</span>
-  </button>
-  <button class="tb-btn tb-compact" onclick="openSprintModal()" title="Sprints">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 14V2.5M3.5 3h8.5l-2 3 2 3H3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <span class="tb-label">Sprints</span>
-  </button>
-  <button class="tb-btn tb-compact" onclick="openClientModal()" title="Cliente">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="4" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M1.5 8.5h13" stroke="currentColor" stroke-width="1.3"/></svg>
-    <span class="tb-label">Cliente</span>
-  </button>
   <button class="tb-btn" onclick="openExportModal()">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 11V2M4.5 5.5L8 2l3.5 3.5M3 10v3a1 1 0 001 1h8a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     Exportar
@@ -687,6 +707,47 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v3.5l2 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
     Hoy
   </button>
+  <div class="tb-sep"></div>
+  <div class="tb-menu-wrap" id="project-menu-wrap">
+    <button class="tb-btn" id="project-menu-btn" onclick="toggleTbMenu('project-menu')" title="Configuración del proyecto" aria-haspopup="true" aria-expanded="false">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2.5" width="12" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 8.5h6M5 11h3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      Proyecto
+    </button>
+    <div class="tb-menu" id="project-menu" hidden>
+      <button class="tb-menu-item" onclick="tbMenuPick(openTeamModal)">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="5" r="2.3" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 13c0-2.2 2-4 4.5-4s4.5 1.8 4.5 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="11.5" cy="5" r="1.8" stroke="currentColor" stroke-width="1.3"/><path d="M13.5 12.5c0-1.5-1.1-2.75-2.5-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Equipo
+      </button>
+      <button class="tb-menu-item" onclick="tbMenuPick(openPhasesModal)">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M6 4V3M10 4V3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5 8h2M9 8h2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Fases
+      </button>
+      <button class="tb-menu-item" onclick="tbMenuPick(openSprintModal)">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 14V2.5M3.5 3h8.5l-2 3 2 3H3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Sprints
+      </button>
+      <button class="tb-menu-item" onclick="tbMenuPick(openClientModal)">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="4" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M1.5 8.5h13" stroke="currentColor" stroke-width="1.3"/></svg>
+        Cliente
+      </button>
+    </div>
+  </div>
+  <div class="tb-menu-wrap" id="calendar-menu-wrap">
+    <button class="tb-btn" id="calendar-menu-btn" onclick="toggleTbMenu('calendar-menu')" title="Feriados e incidentes" aria-haspopup="true" aria-expanded="false">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 2v2M11 2v2M2 7h12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      Calendario
+    </button>
+    <div class="tb-menu" id="calendar-menu" hidden>
+      <button class="tb-menu-item" onclick="tbMenuPick(openHolidayModal)">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 2v2M11 2v2M2 7h12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11" r="1.5" fill="#ef4444"/></svg>
+        Feriados
+      </button>
+      <button class="tb-menu-item" onclick="tbMenuPick(openIncidentModal)">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2.2L14.5 13.5h-13L8 2.2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M8 6.5v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".8" fill="currentColor"/></svg>
+        Incidentes
+      </button>
+    </div>
+  </div>
   <div id="view-menu-wrap">
     <button class="tb-btn" id="view-menu-btn" onclick="toggleViewMenu()" title="Opciones de visualización" aria-haspopup="true" aria-expanded="false">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/></svg>
@@ -1051,6 +1112,57 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
   </div>
 </div>
 
+<!-- ── INCIDENT MODAL ────────────────────────────────────── -->
+<div class="hm-overlay" id="incident-modal-overlay">
+  <div class="hm-panel im-panel">
+    <div class="hm-header">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2.2L14.5 13.5h-13L8 2.2z" stroke="#ea580c" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.5v3" stroke="#ea580c" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".8" fill="#ea580c"/></svg>
+      <div class="hm-title">Incidentes</div>
+      <div class="im-filter" id="im-filter">
+        <button data-f="all" onclick="setIncidentFilter('all')">Todos</button>
+        <button data-f="open" onclick="setIncidentFilter('open')">Abiertos</button>
+        <button data-f="resolved" onclick="setIncidentFilter('resolved')">Resueltos</button>
+      </div>
+      <button class="btn-ghost" onclick="closeIncidentModal()" style="padding:2px 8px">✕</button>
+    </div>
+    <div class="hm-list im-list" id="im-list"></div>
+    <div class="hm-add-form" id="im-add-form" style="display:none">
+      <div class="im-grid">
+        <label class="hm-field im-span2"><span class="hm-label">Título *</span>
+          <input type="text" id="im-title" class="hm-input" placeholder="ej. Demora en la entrega de accesos"></label>
+        <label class="hm-field im-span2"><span class="hm-label">Descripción</span>
+          <textarea id="im-desc" class="hm-input" rows="2"></textarea></label>
+        <label class="hm-field"><span class="hm-label">Fecha</span>
+          <input type="date" id="im-date" class="hm-input"></label>
+        <label class="hm-field"><span class="hm-label">Severidad</span>
+          <select id="im-severity" class="hm-input">
+            <option value="baja">Baja</option>
+            <option value="media" selected>Media</option>
+            <option value="alta">Alta</option>
+            <option value="critica">Crítica</option>
+          </select></label>
+        <label class="hm-field"><span class="hm-label">Tarea vinculada</span>
+          <select id="im-task" class="hm-input"></select></label>
+        <label class="hm-field"><span class="hm-label">Estado</span>
+          <select id="im-status" class="hm-input">
+            <option value="abierto">Abierto</option>
+            <option value="en_seguimiento">En seguimiento</option>
+            <option value="resuelto">Resuelto</option>
+          </select></label>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn-ghost" style="flex:1" onclick="cancelAddIncident()">Cancelar</button>
+        <button class="btn-primary" style="flex:1" onclick="confirmAddIncident()">Agregar</button>
+      </div>
+    </div>
+    <div class="hm-footer">
+      <button class="btn-ghost" id="im-add-btn" onclick="showAddIncidentForm()">+ Nuevo incidente</button>
+      <div style="flex:1"></div>
+      <button class="btn-primary" onclick="closeIncidentModal()">Listo</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── CLIENT MODAL ──────────────────────────────────────── -->
 <div class="cl-overlay" id="client-modal-overlay">
   <div class="cl-panel">
@@ -1190,12 +1302,29 @@ function toggleViewMenu(force) {
       `<label><input type="checkbox" data-key="${o.key}"${state.viewOpts[o.key] ? ' checked' : ''}
         onchange="setViewOpt(this.dataset.key, this.checked)">${esc(o.label)}</label>`).join('');
   }
+  if (open) closeTbMenus();
   menu.hidden = !open;
   document.getElementById('view-menu-btn').setAttribute('aria-expanded', String(open));
 }
 document.addEventListener('mousedown', e => {
   if (!document.getElementById('view-menu').hidden && !e.target.closest('#view-menu-wrap')) toggleViewMenu(false);
+  if (!e.target.closest('.tb-menu-wrap')) closeTbMenus();
 });
+
+// "Proyecto" / "Calendario" toolbar menus: one open at a time; picking an item closes it
+const TB_MENUS = ['project-menu', 'calendar-menu'];
+function toggleTbMenu(id, force) {
+  const menu = document.getElementById(id);
+  const open = force !== undefined ? force : menu.hidden;
+  if (open) { closeTbMenus(); toggleViewMenu(false); }
+  menu.hidden = !open;
+  document.getElementById(id + '-btn').setAttribute('aria-expanded', String(open));
+}
+function closeTbMenus() {
+  TB_MENUS.forEach(id => { if (!document.getElementById(id).hidden) toggleTbMenu(id, false); });
+}
+function anyTbMenuOpen() { return TB_MENUS.some(id => !document.getElementById(id).hidden); }
+function tbMenuPick(fn) { closeTbMenus(); fn(); }
 
 const VIEW_PX = { day: 28, week: 22, month: 8 };
 const ROW_H = 28;
@@ -1360,6 +1489,144 @@ function deleteHoliday(id) {
   const holidays = getHolidays();
   const idx = holidays.findIndex(h => h.id === id);
   if (idx !== -1) { pushUndo(); holidays.splice(idx, 1); renderHolidayList(); rebuildAndRender(false); }
+}
+// ═══════════════════════════════════════════════════════════
+// INCIDENT MODAL
+// ═══════════════════════════════════════════════════════════
+const INCIDENT_SEVERITY = {
+  critica: { label: 'Crítica', color: '#dc2626', rank: 0 },
+  alta:    { label: 'Alta',    color: '#ea580c', rank: 1 },
+  media:   { label: 'Media',   color: '#ca8a04', rank: 2 },
+  baja:    { label: 'Baja',    color: '#6b7280', rank: 3 },
+};
+const INCIDENT_STATUS = { abierto: 'Abierto', en_seguimiento: 'En seguimiento', resuelto: 'Resuelto' };
+let incidentFilter = 'all'; // 'all' | 'open' | 'resolved'
+
+function getIncidents() {
+  if (!state.project) return [];
+  if (!Array.isArray(state.project.incidents)) state.project.incidents = [];
+  return state.project.incidents;
+}
+function newIncidentId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 3 | 8)).toString(16);
+  });
+}
+// IDs of tasks with at least one incident not yet resolved (for the ⚠ in the list)
+function tasksWithOpenIncidents() {
+  const ids = new Map();
+  getIncidents().forEach(inc => {
+    if (inc.taskId && inc.status !== 'resuelto') ids.set(inc.taskId, (ids.get(inc.taskId) || 0) + 1);
+  });
+  return ids;
+}
+function openIncidentModal() {
+  ensureProject();
+  renderIncidentList();
+  cancelAddIncident();
+  document.getElementById('incident-modal-overlay').classList.add('open');
+}
+function closeIncidentModal() {
+  document.getElementById('incident-modal-overlay').classList.remove('open');
+}
+function setIncidentFilter(f) {
+  incidentFilter = f;
+  renderIncidentList();
+}
+function renderIncidentList() {
+  document.querySelectorAll('#im-filter button').forEach(b => b.classList.toggle('active', b.dataset.f === incidentFilter));
+  const all = getIncidents();
+  const el = document.getElementById('im-list');
+  const list = all.filter(inc => incidentFilter === 'all'
+    || (incidentFilter === 'resolved' ? inc.status === 'resuelto' : inc.status !== 'resuelto'));
+  if (!list.length) {
+    const msg = !all.length ? 'No hay incidentes registrados'
+      : incidentFilter === 'open' ? 'No hay incidentes abiertos' : 'No hay incidentes resueltos';
+    el.innerHTML = `<div class="im-empty">${msg}</div>`;
+    return;
+  }
+  const rank = inc => (INCIDENT_SEVERITY[inc.severity] || INCIDENT_SEVERITY.baja).rank;
+  const sorted = [...list].sort((a, b) => rank(a) - rank(b) || String(b.date || '').localeCompare(String(a.date || '')));
+  el.innerHTML = sorted.map(inc => {
+    const sev = INCIDENT_SEVERITY[inc.severity] || INCIDENT_SEVERITY.baja;
+    const resolved = inc.status === 'resuelto';
+    const task = inc.taskId ? getTaskById(inc.taskId) : null;
+    const id = escAttr(inc.id);
+    const meta = [
+      `<span>${esc(formatHolidayDate(inc.date || ''))}</span>`,
+      `<span class="im-status st-${esc(inc.status || '')}">${esc(INCIDENT_STATUS[inc.status] || inc.status || '')}${resolved && inc.resolvedDate ? ' el ' + esc(formatHolidayDate(inc.resolvedDate)) : ''}</span>`,
+      task ? `<span title="Tarea vinculada">↳ #${task.taskNum ?? ''} ${esc(task.name)}</span>` : '',
+    ].join('');
+    return `<div class="im-item${resolved ? ' resolved' : ''}">
+      <span class="im-sev" style="background:${sev.color}">${sev.label}</span>
+      <div class="im-body">
+        <div class="im-title">${esc(String(inc.title || ''))}</div>
+        ${inc.description ? `<div class="im-desc">${esc(String(inc.description))}</div>` : ''}
+        <div class="im-meta">${meta}</div>
+      </div>
+      <div class="im-actions">
+        ${resolved ? '' : `<button class="btn-ghost im-resolve" data-id="${id}" onclick="resolveIncident(this.dataset.id)">Resolver</button>`}
+        <button class="hm-del" data-id="${id}" onclick="deleteIncident(this.dataset.id)" title="Eliminar">×</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function showAddIncidentForm() {
+  document.getElementById('im-add-form').style.display = '';
+  document.getElementById('im-add-btn').style.display = 'none';
+  document.getElementById('im-title').value = '';
+  document.getElementById('im-desc').value = '';
+  document.getElementById('im-date').value = fmtDate(new Date());
+  document.getElementById('im-severity').value = 'media';
+  document.getElementById('im-status').value = 'abierto';
+  const tasks = [...(state.project.tasks || [])].sort((a, b) => (a.taskNum ?? 0) - (b.taskNum ?? 0));
+  document.getElementById('im-task').innerHTML = '<option value="">Ninguna</option>' + tasks.map(t =>
+    `<option value="${escAttr(t.id)}">#${t.taskNum ?? ''} ${esc(t.name)}</option>`).join('');
+  document.getElementById('im-title').focus();
+}
+function cancelAddIncident() {
+  document.getElementById('im-add-form').style.display = 'none';
+  document.getElementById('im-add-btn').style.display = '';
+}
+function confirmAddIncident() {
+  const title = document.getElementById('im-title').value.trim();
+  if (!title) { alert('Escribí un título para el incidente'); document.getElementById('im-title').focus(); return; }
+  const today = fmtDate(new Date());
+  const status = document.getElementById('im-status').value;
+  pushUndo();
+  getIncidents().push({
+    id: newIncidentId(),
+    title,
+    description: document.getElementById('im-desc').value.trim(),
+    date: document.getElementById('im-date').value || today,
+    severity: document.getElementById('im-severity').value,
+    status,
+    taskId: document.getElementById('im-task').value || null,
+    resolvedDate: status === 'resuelto' ? today : null,
+  });
+  cancelAddIncident();
+  renderIncidentList();
+  renderLeft();
+}
+function resolveIncident(id) {
+  const inc = getIncidents().find(x => x.id === id);
+  if (!inc || inc.status === 'resuelto') return;
+  pushUndo();
+  inc.status = 'resuelto';
+  inc.resolvedDate = fmtDate(new Date());
+  renderIncidentList();
+  renderLeft();
+}
+function deleteIncident(id) {
+  const incidents = getIncidents();
+  const idx = incidents.findIndex(x => x.id === id);
+  if (idx === -1) return;
+  pushUndo();
+  incidents.splice(idx, 1);
+  renderIncidentList();
+  renderLeft();
 }
 // ═══════════════════════════════════════════════════════════
 // CLIENT MODAL
@@ -2746,6 +3013,7 @@ function renderLeft() {
     return;
   }
   let html = '';
+  const openIncidents = tasksWithOpenIncidents();
   rows.forEach(({task, depth, hasKids, forceOpen, searchMatch, ancestorOnly}) => {
     const late = state.viewOpts.overdueHighlight && isOverdue(task);
     const sel = (task.id === state.selectedId ? ' selected' : '') + (ancestorOnly ? ' tr-ancestor-only' : '') + (late ? ' overdue' : '');
@@ -2783,6 +3051,10 @@ function renderLeft() {
     const msIcon = task.isMilestone
       ? `<span class="tr-milestone-icon">${task.milestoneCompleted ? '◆' : '◇'}</span>`
       : '';
+    const nInc = openIncidents.get(task.id) || 0;
+    const incIcon = nInc
+      ? `<span class="tr-incident" title="${nInc} ${nInc === 1 ? 'incidente sin resolver' : 'incidentes sin resolver'}">⚠</span>`
+      : '';
     const glIcon = task.isGoLive
       ? `<span class="tr-milestone-icon" style="color:#f59e0b" title="Go Live">🏁</span>`
       : '';
@@ -2792,6 +3064,7 @@ function renderLeft() {
         <div class="tr-indent" style="width:${indent}px"></div>
         ${toggleHtml}${msIcon}${glIcon}
         ${!task.isMilestone?`<div class="tr-color-dot" style="background:${dotColor}"></div>`:''}
+        ${incIcon}
         <div class="tr-name${nameClass}" title="${escAttr(task.name)}">${searchMatch ? highlightMatch(task.name, state.searchQuery) : esc(task.name)}</div>
       </div>
       <div class="tr-date w74${sCalc}">${s}</div>
@@ -3860,7 +4133,10 @@ function setupKeyboard() {
     if (e.key==='Escape' && document.activeElement === searchInput) {
       clearTaskSearch(); searchInput.blur(); e.preventDefault(); return;
     }
-    // Escape: close the "Vista" menu or the filters menu, else the modal
+    // Escape: close a toolbar menu ("Proyecto", "Calendario", "Vista") or the filters menu, else the modal
+    if (e.key==='Escape' && anyTbMenuOpen()) {
+      closeTbMenus(); e.preventDefault(); return;
+    }
     if (e.key==='Escape' && !document.getElementById('view-menu').hidden) {
       toggleViewMenu(false); e.preventDefault(); return;
     }
