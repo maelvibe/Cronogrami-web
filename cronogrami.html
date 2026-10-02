@@ -2106,12 +2106,17 @@ function renderLeft() {
     const sp = task.sprintId ? getSprintById(task.sprintId) : null;
     const sprintCell = `<div class="tr-sprint" title="${sp ? escAttr(sprintDisplayName(sp)) : ''}">${sp ? esc(sprintShort(sp)) : '-'}</div>`;
     const dotColor = task.color || '#64748b';
-    const msIcon = task.isMilestone ? `<span class="tr-milestone-icon">◆</span>` : '';
+    const msIcon = task.isMilestone
+      ? `<span class="tr-milestone-icon">${task.milestoneCompleted ? '◆' : '◇'}</span>`
+      : '';
+    const glIcon = task.isGoLive
+      ? `<span class="tr-milestone-icon" style="color:#f59e0b" title="Go Live">🏁</span>`
+      : '';
     html += `<div class="tr${sel}" data-id="${task.id}" style="position:relative">
       <div class="tr-num">${task.taskNum ?? ''}</div>
       <div class="tr-name-wrap">
         <div class="tr-indent" style="width:${indent}px"></div>
-        ${toggleHtml}${msIcon}
+        ${toggleHtml}${msIcon}${glIcon}
         ${!task.isMilestone?`<div class="tr-color-dot" style="background:${dotColor}"></div>`:''}
         <div class="tr-name${nameClass}" title="${escAttr(task.name)}">${esc(task.name)}</div>
       </div>
@@ -2466,9 +2471,16 @@ function renderGantt() {
 
     if (task.isMilestone) {
       const cx=dateToX(s)+pxd/2, cy=rowTop+ROW_H/2, sz=9;
-      ctx.fillStyle=color;
-      ctx.beginPath();ctx.moveTo(cx,cy-sz);ctx.lineTo(cx+sz,cy);ctx.lineTo(cx,cy+sz);ctx.lineTo(cx-sz,cy);ctx.closePath();ctx.fill();
-      if (isSelected) { ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke(); }
+      const completed = !!task.milestoneCompleted;
+      ctx.beginPath();
+      ctx.moveTo(cx,cy-sz);ctx.lineTo(cx+sz,cy);ctx.lineTo(cx,cy+sz);ctx.lineTo(cx-sz,cy);ctx.closePath();
+      if (completed) {
+        ctx.fillStyle=color; ctx.fill();
+      } else {
+        ctx.fillStyle=hexWithAlpha(color,.15); ctx.fill();
+        ctx.strokeStyle=color; ctx.lineWidth=2; ctx.stroke();
+      }
+      if (isSelected) { ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke(); }
     } else {
       const barH=isPhase?14:16;
       const barY=rowTop+(ROW_H-barH)/2;
@@ -2495,6 +2507,26 @@ function renderGantt() {
         ctx.restore();
       }
     }
+  });
+
+  // Go Live markers — línea ámbar punteada + bandera
+  // (all tasks, not just visible rows: a collapsed phase or sprint filter must not hide it)
+  (state.project?.tasks || []).forEach(task => {
+    if (!task.isGoLive) return;
+    const gs = parseDate(task.startDate);
+    if (!gs) return;
+    const gx = dateToX(gs) + pxd/2;
+    if (gx < 0 || gx > cw) return;
+    ctx.save();
+    ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,ch); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    ctx.moveTo(gx,0); ctx.lineTo(gx+16,6); ctx.lineTo(gx,12); ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   });
 
   // Today line on top
