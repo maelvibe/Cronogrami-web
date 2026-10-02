@@ -1281,7 +1281,12 @@ function exportPDF() {
     const scale = fitScale >= PDF_MIN_FIT_SCALE ? fitScale : 1 / PDF_PX_PER_MM;
     const colW = Math.max(1, Math.floor(availW / scale)); // canvas px per page, horizontally
     const rowH = Math.max(1, Math.floor(availH / scale)); // canvas px per page, vertically
-    const cols = Math.ceil(img.width / colW), rows = Math.ceil(img.height / rowH);
+    // The export canvas is: title bar + ruler + task rows. Pages after the first row
+    // repeat the ruler on top, so they fit rulerH fewer px of task rows.
+    const rulerH = document.getElementById('ruler-canvas').height;
+    const rowsPerNextPage = Math.max(1, rowH - rulerH);
+    const rows = img.height <= rowH ? 1 : 1 + Math.ceil((img.height - rowH) / rowsPerNextPage);
+    const cols = Math.ceil(img.width / colW);
     const pages = cols * rows;
     const name = state.project?.project_name || 'Proyecto';
     const generated = 'Generado: ' + new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -1301,12 +1306,23 @@ function exportPDF() {
           pdf.setFontSize(9); pdf.text(pageLabel, pageW - M, M + 5, { align: 'right' });
         }
         // The last column/row can be narrower/shorter than a full page
-        const sx = c * colW, sy = r * rowH;
-        const w = Math.min(colW, img.width - sx), h = Math.min(rowH, img.height - sy);
+        const sx = c * colW;
+        const w = Math.min(colW, img.width - sx);
         const slice = document.createElement('canvas');
-        slice.width = w; slice.height = h;
-        slice.getContext('2d').drawImage(img, sx, sy, w, h, 0, 0, w, h);
-        pdf.addImage(slice.toDataURL('image/png'), 'PNG', M, M + HEADER, w * scale, h * scale, undefined, 'FAST');
+        const sctx = slice.getContext('2d');
+        if (r === 0) {
+          const h = Math.min(rowH, img.height);
+          slice.width = w; slice.height = h;
+          sctx.drawImage(img, sx, 0, w, h, 0, 0, w, h);
+        } else {
+          // Same ruler segment as the first row of this column, then the next block of rows
+          const sy = rowH + (r - 1) * rowsPerNextPage;
+          const h = Math.min(rowsPerNextPage, img.height - sy);
+          slice.width = w; slice.height = rulerH + h;
+          sctx.drawImage(img, sx, EXPORT_TITLE_H, w, rulerH, 0, 0, w, rulerH);
+          sctx.drawImage(img, sx, sy, w, h, 0, rulerH, w, h);
+        }
+        pdf.addImage(slice.toDataURL('image/png'), 'PNG', M, M + HEADER, w * scale, slice.height * scale, undefined, 'FAST');
       }
     }
     await triggerDownload(exportBaseName() + '.pdf', pdf.output('blob'));
@@ -1990,7 +2006,7 @@ function renumberTasks() {
 function ensureProject() {
   if (!state.project) {
     state.project = { version:'1.0', project_name:'Nuevo proyecto', client_name:'', client_contact:'', client_email:'', tasks:[], team:[], phases:[], sprints:[], holidays:[], incidents:[] };
-    document.getElementById('project-name').textContent = 'Nuevo proyecto';
+    setProjectNameDisplay('Nuevo proyecto');
     document.getElementById('empty-state').style.display = 'none';
   }
 }
@@ -2995,6 +3011,13 @@ function newTask() {
 // ═══════════════════════════════════════════════════════════
 // PROJECT NAME EDIT
 // ═══════════════════════════════════════════════════════════
+// Visible text + hover tooltip with the full name (the toolbar can truncate it)
+function setProjectNameDisplay(name) {
+  const el = document.getElementById('project-name');
+  el.textContent = name;
+  el.title = name;
+}
+
 function setupProjectNameEdit() {
   const el = document.getElementById('project-name');
   el.addEventListener('click', () => {
@@ -3008,13 +3031,18 @@ function setupProjectNameEdit() {
   });
   el.addEventListener('blur', () => {
     el.contentEditable = 'false';
-    if (state.project) state.project.project_name = el.textContent.trim() || 'Sin nombre';
+    if (state.project) {
+      state.project.project_name = el.textContent.trim() || 'Sin nombre';
+      setProjectNameDisplay(state.project.project_name);
+    }
   });
   el.addEventListener('keydown', e => {
     if (e.key==='Enter') { e.preventDefault(); el.blur(); }
     if (e.key==='Escape') {
+      // Restore first: leaving edit mode fires blur, which saves whatever text is shown
+      if (state.project) setProjectNameDisplay(state.project.project_name);
       el.contentEditable='false';
-      if (state.project) el.textContent = state.project.project_name;
+      el.blur();
     }
   });
 }
@@ -3098,8 +3126,7 @@ function loadProject(data, filename) {
   // ────────────────────────────────────────────────────────
   state.project = data;
   state.sprintFilter = '';
-  document.getElementById('project-name').textContent =
-    data.project_name || data.projectName || filename || 'Proyecto sin nombre';
+  setProjectNameDisplay(data.project_name || data.projectName || filename || 'Proyecto sin nombre');
   state.expanded.clear();
   // 3. `expanded` field on tasks (Python) → state.expanded Set (web)
   //    If the file has Python-style expanded flags use them; otherwise expand all roots
