@@ -43,15 +43,22 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 #logo svg{flex-shrink:0}
 #logo-text{font-size:15px;font-weight:600;letter-spacing:-.3px;color:var(--fg)}
 #logo-text span{color:var(--accent)}
+/* Project name with the client stacked below it: takes the room it needs (up to a
+   cap) and is the first thing to shrink when the toolbar gets tight */
+#toolbar>*{flex-shrink:0}
+#project-info{
+  display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:1px;
+  flex:0 1 auto;min-width:120px;max-width:420px;
+}
 #project-name{
-  flex:1;font-size:12px;color:var(--fg2);overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;max-width:160px;padding:2px 8px;border-radius:5px;
+  max-width:100%;font-size:12px;color:var(--fg2);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;padding:2px 8px;border-radius:5px;
   cursor:text;border:1px solid transparent;outline:none;transition:border-color .15s,background .15s;
 }
 #project-name:hover{background:var(--surface2)}
 #project-name:focus,[contenteditable="true"]#project-name{
   border-color:var(--accent);background:var(--surface2);color:var(--fg);
-  white-space:normal;overflow:visible;text-overflow:clip;
+  text-overflow:clip;
 }
 .tb-sep{width:1px;height:22px;background:var(--border);margin:0 2px}
 .tb-btn{
@@ -518,9 +525,9 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 #toast.error{border-color:var(--danger);color:#fca5a5}
 /* ── Client badge in toolbar ── */
 #client-badge{
-  display:none;align-items:center;gap:5px;padding:3px 9px 3px 7px;
-  border-radius:12px;background:rgba(132,204,22,.15);border:1px solid rgba(132,204,22,.35);
-  font-size:11px;color:var(--accent);cursor:pointer;white-space:nowrap;max-width:110px;
+  display:none;align-items:center;gap:4px;padding:1px 7px 1px 6px;margin-left:4px;
+  border-radius:10px;background:rgba(132,204,22,.15);border:1px solid rgba(132,204,22,.35);
+  font-size:10.5px;line-height:14px;color:var(--accent);cursor:pointer;white-space:nowrap;max-width:calc(100% - 4px);
   overflow:hidden;text-overflow:ellipsis
 }
 #client-badge svg{flex-shrink:0}
@@ -540,10 +547,12 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
     </svg>
     <div id="logo-text">Crono<span>grami</span></div>
   </div>
-  <div id="project-name" contenteditable="false" title="Click para editar el nombre">Sin proyecto cargado</div>
-  <div id="client-badge" onclick="openClientModal()" title="Cliente del proyecto">
-    <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="4" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-    <span id="client-badge-text"></span>
+  <div id="project-info">
+    <div id="project-name" contenteditable="false" title="Click para editar el nombre">Sin proyecto cargado</div>
+    <div id="client-badge" onclick="openClientModal()" title="Cliente del proyecto">
+      <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="4" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span id="client-badge-text"></span>
+    </div>
   </div>
 
   <label class="tb-btn" for="file-input" style="cursor:pointer">
