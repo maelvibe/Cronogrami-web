@@ -648,6 +648,26 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .cl-input:focus{border-color:var(--accent)}
 .cl-footer{display:flex;justify-content:flex-end;padding:10px 16px 14px;
   border-top:1px solid var(--border2);gap:8px}
+/* Client modal: contacts, approval and agreement notes */
+.cl-panel.cl-wide{width:600px;max-height:92vh}
+.cl-wide .cl-body{overflow-y:auto}
+.cl-row{display:flex;gap:10px}
+.cl-row>.cl-field{flex:1;min-width:0}
+.cl-section{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cl-contacts{display:flex;flex-direction:column;gap:8px}
+.cl-contact{border:1px solid var(--border2);border-radius:7px;padding:8px;display:grid;
+  grid-template-columns:1fr 1fr auto;gap:6px;align-items:center;background:var(--surface)}
+.cl-contact.primary{border-color:rgba(132,204,22,.5)}
+.cl-contact .cl-input{padding:5px 8px;font-size:12.5px;min-width:0}
+.cl-contact-tools{grid-row:span 2;display:flex;flex-direction:column;gap:4px;align-items:stretch}
+.cl-contact-tools button{padding:3px 8px;font-size:11px;white-space:nowrap}
+.cl-primary-btn.on{color:var(--accent);border-color:rgba(132,204,22,.5)}
+.cl-empty{font-size:12px;color:var(--fg3);padding:4px 0}
+.cl-notes{resize:vertical;min-height:70px;font-family:inherit}
+.cl-appr-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:none}
+.appr-pendiente{background:#fbbf24}.appr-observaciones{background:#fb923c}
+.appr-aprobado{background:#84cc16}.appr-rechazado{background:#ef4444}
+@media (max-width:520px){.cl-contact{grid-template-columns:1fr}.cl-contact-tools{grid-row:auto;flex-direction:row;order:5}.cl-row{flex-direction:column}}
 /* ── Export / Import modal ── */
 .ex-panel{width:420px}
 .ex-section{font-size:11px;color:var(--fg2);font-weight:500;text-transform:uppercase;letter-spacing:.04em}
@@ -693,6 +713,7 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
     <div id="project-name" contenteditable="false" title="Click para editar el nombre">Sin proyecto cargado</div>
     <div id="client-badge" onclick="openClientModal()" title="Cliente del proyecto">
       <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="4" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span class="cl-appr-dot" id="client-badge-dot"></span>
       <span id="client-badge-text"></span>
     </div>
   </div>
@@ -1187,7 +1208,7 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 
 <!-- ── CLIENT MODAL ──────────────────────────────────────── -->
 <div class="cl-overlay" id="client-modal-overlay">
-  <div class="cl-panel">
+  <div class="cl-panel cl-wide">
     <div class="cl-header">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="4" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M1.5 8.5h13" stroke="currentColor" stroke-width="1.5"/></svg>
       <div class="cl-title">Datos del Cliente</div>
@@ -1198,13 +1219,30 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
         <div class="cl-label">Empresa / Cliente</div>
         <input type="text" id="cl-name" class="cl-input" placeholder="Nombre de la empresa">
       </div>
-      <div class="cl-field">
-        <div class="cl-label">Contacto</div>
-        <input type="text" id="cl-contact" class="cl-input" placeholder="Nombre del contacto">
+      <div class="cl-row">
+        <div class="cl-field">
+          <div class="cl-label">Estado de aprobación</div>
+          <select id="cl-approval" class="cl-input">
+            <option value="">Sin definir</option>
+            <option value="pendiente">Pendiente de aprobación</option>
+            <option value="observaciones">Aprobado con observaciones</option>
+            <option value="aprobado">Aprobado</option>
+            <option value="rechazado">Rechazado</option>
+          </select>
+        </div>
+        <div class="cl-field">
+          <div class="cl-label">Fecha de aprobación / respuesta</div>
+          <input type="date" id="cl-approval-date" class="cl-input">
+        </div>
       </div>
+      <div class="cl-section">
+        <div class="cl-label">Contactos</div>
+        <button class="btn-ghost" onclick="addClientContact()" style="padding:3px 10px;font-size:12px">+ Agregar contacto</button>
+      </div>
+      <div class="cl-contacts" id="cl-contacts"></div>
       <div class="cl-field">
-        <div class="cl-label">Email</div>
-        <input type="email" id="cl-email" class="cl-input" placeholder="contacto@empresa.com">
+        <div class="cl-label">Notas de acuerdos</div>
+        <textarea id="cl-notes" class="cl-input cl-notes" rows="4" placeholder="Acuerdos, alcance pactado, condiciones, minutas…"></textarea>
       </div>
     </div>
     <div class="cl-footer">
@@ -1653,37 +1691,134 @@ function deleteIncident(id) {
 // ═══════════════════════════════════════════════════════════
 // CLIENT MODAL
 // ═══════════════════════════════════════════════════════════
+const CLIENT_APPROVAL = {
+  pendiente:     'Pendiente de aprobación',
+  observaciones: 'Aprobado con observaciones',
+  aprobado:      'Aprobado',
+  rechazado:     'Rechazado',
+};
+let clientDraft = [];  // contacts being edited in the modal; committed on Guardar
+
+// Older files only have client_contact / client_email: turn them into the contact list.
+// Saving keeps both legacy fields in sync with the primary contact, so older readers still work.
+function normalizeClient(p) {
+  if (!p) return;
+  if (!Array.isArray(p.client_contacts)) {
+    p.client_contacts = (p.client_contact || p.client_email)
+      ? [{ id: 'cc' + Date.now(), name: p.client_contact || '', role: '', email: p.client_email || '', phone: '', primary: true }]
+      : [];
+  }
+  if (p.client_contacts.length && !p.client_contacts.some(c => c.primary)) p.client_contacts[0].primary = true;
+  if (typeof p.client_notes !== 'string') p.client_notes = '';
+  if (!CLIENT_APPROVAL[p.client_approval]) p.client_approval = '';
+  if (typeof p.client_approval_date !== 'string') p.client_approval_date = '';
+}
+
 function openClientModal() {
   ensureProject();
   const p = state.project;
-  document.getElementById('cl-name').value    = p.client_name    || '';
-  document.getElementById('cl-contact').value = p.client_contact || '';
-  document.getElementById('cl-email').value   = p.client_email   || '';
+  normalizeClient(p);
+  document.getElementById('cl-name').value          = p.client_name || '';
+  document.getElementById('cl-approval').value      = p.client_approval;
+  document.getElementById('cl-approval-date').value = p.client_approval_date;
+  document.getElementById('cl-notes').value         = p.client_notes;
+  clientDraft = p.client_contacts.map(c => ({ ...c }));
+  renderClientContacts();
   document.getElementById('client-modal-overlay').classList.add('open');
 }
 function closeClientModal() {
   document.getElementById('client-modal-overlay').classList.remove('open');
 }
+function renderClientContacts() {
+  const box = document.getElementById('cl-contacts');
+  box.innerHTML = '';
+  if (!clientDraft.length) {
+    box.innerHTML = '<div class="cl-empty">Sin contactos cargados.</div>';
+    return;
+  }
+  const fields = [['name','text','Nombre'], ['role','text','Cargo'], ['email','email','Email'], ['phone','tel','Teléfono']];
+  clientDraft.forEach((c, i) => {
+    const card = document.createElement('div');
+    card.className = 'cl-contact' + (c.primary ? ' primary' : '');
+    fields.forEach(([key, type, ph], fi) => {
+      const inp = document.createElement('input');
+      inp.type = type; inp.className = 'cl-input'; inp.placeholder = ph;
+      inp.value = c[key] || '';
+      inp.oninput = () => { c[key] = inp.value; };
+      card.appendChild(inp);
+      if (fi === 1) {  // tools column sits right of the first row and spans both rows
+        const tools = document.createElement('div');
+        tools.className = 'cl-contact-tools';
+        const prim = document.createElement('button');
+        prim.className = 'btn-ghost cl-primary-btn' + (c.primary ? ' on' : '');
+        prim.textContent = c.primary ? '★ Principal' : '☆ Principal';
+        prim.title = 'Contacto principal del cliente';
+        prim.onclick = () => { clientDraft.forEach(o => o.primary = (o === c)); renderClientContacts(); };
+        const del = document.createElement('button');
+        del.className = 'btn-ghost';
+        del.textContent = 'Quitar';
+        del.onclick = () => {
+          clientDraft.splice(i, 1);
+          if (c.primary && clientDraft.length) clientDraft[0].primary = true;
+          renderClientContacts();
+        };
+        tools.append(prim, del);
+        card.appendChild(tools);
+      }
+    });
+    box.appendChild(card);
+  });
+}
+function addClientContact() {
+  clientDraft.push({ id: 'cc' + Date.now() + Math.random().toString(36).slice(2, 6),
+    name: '', role: '', email: '', phone: '', primary: clientDraft.length === 0 });
+  renderClientContacts();
+  const inputs = document.querySelectorAll('#cl-contacts .cl-contact:last-child input');
+  if (inputs[0]) inputs[0].focus();
+}
 function saveClientModal() {
   ensureProject();
   const p = state.project;
   pushUndo();
-  p.client_name    = document.getElementById('cl-name').value.trim();
-  p.client_contact = document.getElementById('cl-contact').value.trim();
-  p.client_email   = document.getElementById('cl-email').value.trim();
+  p.client_name = document.getElementById('cl-name').value.trim();
+  const contacts = clientDraft
+    .map(c => ({ id: c.id, name: (c.name||'').trim(), role: (c.role||'').trim(),
+                 email: (c.email||'').trim(), phone: (c.phone||'').trim(), primary: !!c.primary }))
+    .filter(c => c.name || c.role || c.email || c.phone);
+  if (contacts.length && !contacts.some(c => c.primary)) contacts[0].primary = true;
+  p.client_contacts      = contacts;
+  p.client_approval      = document.getElementById('cl-approval').value;
+  p.client_approval_date = document.getElementById('cl-approval-date').value;
+  p.client_notes         = document.getElementById('cl-notes').value.trim();
+  const main = contacts.find(c => c.primary);
+  p.client_contact = main ? main.name  : '';
+  p.client_email   = main ? main.email : '';
   updateClientBadge();
   closeClientModal();
 }
 function updateClientBadge() {
   const badge = document.getElementById('client-badge');
   const text  = document.getElementById('client-badge-text');
-  const name  = (state.project && state.project.client_name) ? state.project.client_name : '';
+  const dot   = document.getElementById('client-badge-dot');
+  const p     = state.project;
+  const name  = (p && p.client_name) ? p.client_name : '';
   if (name) {
     text.textContent = name;
     badge.style.display = 'flex';
+    const appr = p.client_approval && CLIENT_APPROVAL[p.client_approval];
+    dot.className = 'cl-appr-dot' + (appr ? ' appr-' + p.client_approval : '');
+    dot.style.display = appr ? 'inline-block' : 'none';
+    const main = (p.client_contacts || []).find(c => c.primary);
+    badge.title = 'Cliente: ' + name
+      + (main && main.name ? '\nContacto: ' + main.name + (main.role ? ' (' + main.role + ')' : '') : '')
+      + (appr ? '\nAprobación: ' + appr + (p.client_approval_date ? ' · ' + fmtClientDate(p.client_approval_date) : '') : '');
   } else {
     badge.style.display = 'none';
   }
+}
+function fmtClientDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : iso;
 }
 // ═══════════════════════════════════════════════════════════
 // EXPORT / IMPORT MODAL
@@ -2934,7 +3069,7 @@ function renumberTasks() {
 
 function ensureProject() {
   if (!state.project) {
-    state.project = { version:'1.0', project_name:'Nuevo proyecto', client_name:'', client_contact:'', client_email:'', tasks:[], team:[], phases:[], sprints:[], holidays:[], incidents:[] };
+    state.project = { version:'1.0', project_name:'Nuevo proyecto', client_name:'', client_contact:'', client_email:'', client_contacts:[], client_approval:'', client_approval_date:'', client_notes:'', tasks:[], team:[], phases:[], sprints:[], holidays:[], incidents:[] };
     setProjectNameDisplay('Nuevo proyecto');
     document.getElementById('empty-state').style.display = 'none';
   }
@@ -4446,6 +4581,8 @@ function loadProject(data, filename) {
     data.tasks.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
   }
   // ────────────────────────────────────────────────────────
+  // 5. Single client contact (older files) → client_contacts list
+  normalizeClient(data);
   state.project = data;
   // 4. Restaurar vista y zoom si el archivo los tiene guardados
   if (data.viewMode && VIEW_PX[data.viewMode]) {
