@@ -202,7 +202,13 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 .list-no-match{padding:16px 12px;font-size:12px;color:var(--fg3);text-align:center}
 .search-hl{background:#fef08a;color:#1e293b;border-radius:2px}
 .tr-ancestor-only{opacity:0.5}
-#task-scroll{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
+#task-scroll{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;position:relative}
+/* Drag to reorder rows */
+#row-drop-line{position:absolute;right:4px;height:2px;margin-top:-1px;background:var(--accent);border-radius:1px;pointer-events:none;z-index:5}
+#row-drop-line::before{content:'';position:absolute;left:-3px;top:-2px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.tr.tr-drag-src{opacity:.45}
+body.row-dragging,body.row-dragging *{cursor:grabbing!important;user-select:none!important}
+body.row-dragging.row-drop-no,body.row-dragging.row-drop-no *{cursor:not-allowed!important}
 #task-scroll::-webkit-scrollbar{width:6px}
 #task-scroll::-webkit-scrollbar-track{background:transparent}
 #task-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
@@ -3065,6 +3071,8 @@ function renumberTasks() {
   let num = 1;
   function walk(task) { task.taskNum = num++; (children[task.id]||[]).forEach(walk); }
   roots.forEach(walk);
+  // `order` mirrors the array position: loadProject() sorts by it when reopening the file
+  tasks.forEach((t, i) => t.order = i);
 }
 
 function ensureProject() {
@@ -3904,6 +3912,142 @@ function setupRowEvents() {
       e.stopPropagation();
     }
   });
+}
+
+// ═══════════════════════════════════════════════════════════
+// ROW DRAG (reorder tasks in the list)
+// ═══════════════════════════════════════════════════════════
+// A task moves with all its subtasks, and only among its siblings: a subtask never
+// leaves its parent. Works on the visible rows, so it also works with search/filters
+// (hidden siblings keep their relative place).
+function setupRowDrag() {
+  const scroll = document.getElementById('task-scroll');
+  const line = document.createElement('div');
+  line.id = 'row-drop-line';
+  let d = null;            // { id, startY, lastY, active, target: { sibId, after } | null }
+  let suppressClick = false;
+  let raf = 0;
+
+  scroll.addEventListener('mousedown', e => {
+    if (e.button !== 0 || e.target.closest('.tr-toggle')) return;
+    const row = e.target.closest('.tr');
+    if (row) d = { id: row.dataset.id, startY: e.clientY, lastY: e.clientY, active: false, target: null };
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!d) return;
+    d.lastY = e.clientY;
+    if (!d.active) {
+      if (Math.abs(e.clientY - d.startY) < 5) return;
+      d.active = true;
+      window.getSelection()?.removeAllRanges();
+      document.body.classList.add('row-dragging');
+      scroll.querySelector(`.tr[data-id="${CSS.escape(d.id)}"]`)?.classList.add('tr-drag-src');
+      scroll.appendChild(line);
+      raf = requestAnimationFrame(autoScroll);
+    }
+    e.preventDefault();
+    update();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!d) return;
+    const { active, target, id } = d;
+    d = null;
+    if (!active) return;
+    cancelAnimationFrame(raf);
+    line.remove();
+    document.body.classList.remove('row-dragging', 'row-drop-no');
+    scroll.querySelector('.tr.tr-drag-src')?.classList.remove('tr-drag-src');
+    // The click that follows this mouseup must not select/scroll as a normal click
+    suppressClick = true;
+    setTimeout(() => suppressClick = false, 0);
+    if (target) moveTaskBlock(id, target.sibId, target.after);
+  });
+
+  scroll.addEventListener('click', e => {
+    if (suppressClick) { suppressClick = false; e.stopPropagation(); }
+  }, true);
+
+  // Scroll the list while the pointer is near its top or bottom edge
+  function autoScroll() {
+    if (!d || !d.active) return;
+    const r = scroll.getBoundingClientRect();
+    const edge = 28;
+    let dy = 0;
+    if (d.lastY < r.top + edge) dy = -Math.ceil((r.top + edge - d.lastY) / 3);
+    else if (d.lastY > r.bottom - edge) dy = Math.ceil((d.lastY - (r.bottom - edge)) / 3);
+    if (dy) {
+      const before = scroll.scrollTop;
+      scroll.scrollTop += dy;
+      if (scroll.scrollTop !== before) update();
+    }
+    raf = requestAnimationFrame(autoScroll);
+  }
+
+  function update() {
+    d.target = findTarget(d.lastY);
+    document.body.classList.toggle('row-drop-no', !d.target);
+    line.style.display = d.target ? '' : 'none';
+    if (d.target) {
+      line.style.top = d.target.y + 'px';
+      line.style.left = d.target.left + 'px';
+    }
+  }
+
+  // Drop position for pointer y: before or after the sibling (of the dragged task)
+  // whose block of visible rows the pointer is over. null when there is none.
+  function findTarget(clientY) {
+    const rows = [...scroll.querySelectorAll('.tr')];
+    if (!rows.length) return null;
+    let idx = rows.findIndex(r => clientY < r.getBoundingClientRect().bottom);
+    if (idx < 0) idx = rows.length - 1;
+    const byId = {};
+    state.project.tasks.forEach(t => byId[t.id] = t);
+    const parentOf = t => (t.parentId && byId[t.parentId]) ? t.parentId : null;
+    const dragged = byId[d.id];
+    if (!dragged) return null;
+    const pid = parentOf(dragged);
+    // Climb from the hovered task to its ancestor that shares the dragged task's parent
+    let s = byId[rows[idx].dataset.id];
+    for (let n = 0; s && parentOf(s) !== pid && n < 100; n++) s = byId[parentOf(s)];
+    if (!s || s.id === d.id) return null;
+    // Visible rows of that sibling and its subtasks, around the hovered row
+    const block = new Set([s.id, ...getAllDescendants(s.id)]);
+    let first = idx, last = idx;
+    while (first > 0 && block.has(rows[first - 1].dataset.id)) first--;
+    while (last < rows.length - 1 && block.has(rows[last + 1].dataset.id)) last++;
+    const top = rows[first].getBoundingClientRect().top;
+    const bottom = rows[last].getBoundingClientRect().bottom;
+    const after = clientY > (top + bottom) / 2;
+    const origin = scroll.getBoundingClientRect().top - scroll.scrollTop;
+    const depth = state.flat[first] && state.flat[first].task.id === rows[first].dataset.id
+      ? state.flat[first].depth : 0;
+    return { sibId: s.id, after, y: (after ? bottom : top) - origin, left: 36 + depth * 24 + 16 };
+  }
+}
+
+// Moves a task and its subtasks before/after a sibling (and the sibling's subtasks)
+function moveTaskBlock(id, sibId, after) {
+  const tasks = state.project.tasks;
+  const moving = new Set([id, ...getAllDescendants(id)]);
+  const block = tasks.filter(t => moving.has(t.id));
+  const rest = tasks.filter(t => !moving.has(t.id));
+  let at;
+  if (after) {
+    const sib = new Set([sibId, ...getAllDescendants(sibId)]);
+    rest.forEach((t, i) => { if (sib.has(t.id)) at = i + 1; });
+  } else {
+    at = rest.findIndex(t => t.id === sibId);
+  }
+  if (at == null || at < 0) return;
+  const next = [...rest.slice(0, at), ...block, ...rest.slice(at)];
+  if (next.every((t, i) => t === tasks[i])) return;
+  pushUndo();
+  tasks.splice(0, tasks.length, ...next);
+  state.selectedId = id;
+  renumberTasks();
+  rebuildAndRender(false);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -4848,6 +4992,7 @@ window.addEventListener('resize', () => {
 setupScrollSync();
 setupCanvasInteraction();
 setupRowEvents();
+setupRowDrag();
 setupContextMenu();
 setupResize();
 setupModal();
