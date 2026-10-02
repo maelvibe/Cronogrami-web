@@ -45,7 +45,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 #logo-text span{color:var(--accent)}
 #project-name{
   flex:1;font-size:12px;color:var(--fg2);overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;max-width:240px;padding:2px 8px;border-radius:5px;
+  white-space:nowrap;max-width:160px;padding:2px 8px;border-radius:5px;
   cursor:text;border:1px solid transparent;outline:none;transition:border-color .15s,background .15s;
 }
 #project-name:hover{background:var(--surface2)}
@@ -53,9 +53,9 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
   border-color:var(--accent);background:var(--surface2);color:var(--fg);
   white-space:normal;overflow:visible;text-overflow:clip;
 }
-.tb-sep{width:1px;height:22px;background:var(--border);margin:0 4px}
+.tb-sep{width:1px;height:22px;background:var(--border);margin:0 2px}
 .tb-btn{
-  display:flex;align-items:center;gap:5px;padding:5px 10px;border:none;
+  display:flex;align-items:center;gap:5px;padding:5px 7px;border:none;
   background:transparent;color:var(--fg2);border-radius:6px;cursor:pointer;
   font-size:12px;font-family:inherit;white-space:nowrap;transition:background .12s,color .12s;
 }
@@ -459,10 +459,11 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 #client-badge{
   display:none;align-items:center;gap:5px;padding:3px 9px 3px 7px;
   border-radius:12px;background:rgba(132,204,22,.15);border:1px solid rgba(132,204,22,.35);
-  font-size:11px;color:var(--accent);cursor:pointer;white-space:nowrap;max-width:140px;
+  font-size:11px;color:var(--accent);cursor:pointer;white-space:nowrap;max-width:110px;
   overflow:hidden;text-overflow:ellipsis
 }
 #client-badge svg{flex-shrink:0}
+#client-badge-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
 #client-badge:hover{background:rgba(132,204,22,.25)}
 
 </style>
@@ -819,6 +820,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- NOTA PARA PUBLICAR: este archivo necesita capabilities: { downloads: true } al publicarse como artifact de Claude -->
 <script>
 // ═══════════════════════════════════════════════════════════
 // STATE
@@ -1045,19 +1047,44 @@ async function withLoading(btnId, fn) {
 
 function exportBaseName() {
   // ASCII-only: browsers drop the download name ("download") when it has accents or dashes like "–"
-  const name = (state.project?.project_name || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[–—]/g, '-').replace(/[^A-Za-z0-9 ._-]+/g, '_').trim() || 'proyecto';
+  const name = (state.project?.project_name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u2013\u2014]/g, '-').replace(/[^A-Za-z0-9 ._-]+/g, '_').trim() || 'proyecto';
   return 'cronograma-' + name;
 }
-function downloadURL(url, filename) {
+// True when the page runs inside a Claude artifact
+function isClaudeArtifact() {
+  return !!(window.__claudeArtifact__ || location.hostname.includes('claude.ai') || window.claude);
+}
+// Saves a generated file. Inside a Claude artifact published with capabilities
+// { downloads: true } it goes through the platform's downloads API (the sandbox
+// blocks <a download>); otherwise it falls back to a regular link download.
+async function triggerDownload(filename, blob) {
+  // use('downloads') resolves null when the artifact wasn't published with that capability
+  if (isClaudeArtifact() && typeof window.claude?.use === 'function') {
+    let downloads = null;
+    try { downloads = await window.claude.use('downloads'); } catch (e) { /* fallback */ }
+    if (downloads) {
+      try {
+        await downloads.save({ filename, data: blob });
+        return;
+      } catch (err) {
+        // The viewer said no: respect it instead of forcing another download
+        if (err?.code === 'declined') return;
+        if (err?.code === 'rate_limited') throw new Error('Ya hay una descarga pendiente de confirmar.');
+        console.warn('downloads.save failed, using link fallback', err);
+      }
+    }
+  }
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); a.remove();
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  downloadURL(url, filename);
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+function canvasToBlob(canvas) {
+  return new Promise((resolve, reject) =>
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('No se pudo generar la imagen.')), 'image/png'));
 }
 function hasTasksToExport() {
   if (state.project && (state.project.tasks || []).length) return true;
@@ -1088,42 +1115,63 @@ function buildExportCanvas() {
 
 function exportPNG() {
   if (!hasTasksToExport()) return;
-  return withLoading('ex-btn-png', () => {
+  return withLoading('ex-btn-png', async () => {
     const canvas = buildExportCanvas();
-    downloadURL(canvas.toDataURL('image/png'), exportBaseName() + '.png');
+    await triggerDownload(exportBaseName() + '.png', await canvasToBlob(canvas));
   });
 }
 
 // ─── PDF ─────────────────────────────────────────────────
+// Native resolution for paginated output: 72 dpi → 1 mm ≈ 2.835 canvas px
+const PDF_PX_PER_MM = 72 / 25.4;
+// Smallest scale (mm per canvas px) that still fits the chart on one page: below it the
+// 11 px bar labels drop under ~5 pt, so the chart is paginated at native size instead
+const PDF_MIN_FIT_SCALE = 0.16;
+
 function exportPDF() {
   if (!hasTasksToExport()) return;
   if (!window.jspdf) { showToast('No se pudo cargar la librería de PDF (jsPDF).', true); return; }
-  return withLoading('ex-btn-pdf', () => {
+  return withLoading('ex-btn-pdf', async () => {
     const img = buildExportCanvas();
     const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
     const pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
     const M = 10, HEADER = 10;
     const availW = pageW - 2 * M, availH = pageH - 2 * M - HEADER;
-    // Fit the full width on the page (wide charts are scaled down; never enlarged past 96 dpi)
-    const scale = Math.min(availW / img.width, 25.4 / 96);
-    // If it's still too tall, continue on extra pages
-    const sliceH = Math.max(1, Math.floor(availH / scale));
-    const pages = Math.ceil(img.height / sliceH);
+    // Readable when fitted to the page width → one page wide (never enlarged past 96 dpi).
+    // Otherwise native resolution, cut into vertical strips of one page width each.
+    const fitScale = Math.min(availW / img.width, 25.4 / 96);
+    const scale = fitScale >= PDF_MIN_FIT_SCALE ? fitScale : 1 / PDF_PX_PER_MM;
+    const colW = Math.max(1, Math.floor(availW / scale)); // canvas px per page, horizontally
+    const rowH = Math.max(1, Math.floor(availH / scale)); // canvas px per page, vertically
+    const cols = Math.ceil(img.width / colW), rows = Math.ceil(img.height / rowH);
+    const pages = cols * rows;
     const name = state.project?.project_name || 'Proyecto';
     const generated = 'Generado: ' + new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    for (let p = 0; p < pages; p++) {
-      if (p > 0) pdf.addPage();
-      pdf.setTextColor(20, 20, 20);
-      pdf.setFontSize(14); pdf.text(name, M, M + 5);
-      pdf.setFontSize(9);
-      pdf.text(generated + (pages > 1 ? `  ·  Página ${p + 1}/${pages}` : ''), pageW - M, M + 5, { align: 'right' });
-      const y = p * sliceH, h = Math.min(sliceH, img.height - y);
-      const slice = document.createElement('canvas');
-      slice.width = img.width; slice.height = h;
-      slice.getContext('2d').drawImage(img, 0, y, img.width, h, 0, 0, img.width, h);
-      pdf.addImage(slice.toDataURL('image/png'), 'PNG', M, M + HEADER, img.width * scale, h * scale, undefined, 'FAST');
+
+    let page = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        page++;
+        if (page > 1) pdf.addPage();
+        pdf.setTextColor(20, 20, 20);
+        const pageLabel = `Página ${page}/${pages}`;
+        if (page === 1) {
+          pdf.setFontSize(14); pdf.text(name, M, M + 5);
+          pdf.setFontSize(9);
+          pdf.text(generated + (pages > 1 ? '  ·  ' + pageLabel : ''), pageW - M, M + 5, { align: 'right' });
+        } else {
+          pdf.setFontSize(9); pdf.text(pageLabel, pageW - M, M + 5, { align: 'right' });
+        }
+        // The last column/row can be narrower/shorter than a full page
+        const sx = c * colW, sy = r * rowH;
+        const w = Math.min(colW, img.width - sx), h = Math.min(rowH, img.height - sy);
+        const slice = document.createElement('canvas');
+        slice.width = w; slice.height = h;
+        slice.getContext('2d').drawImage(img, sx, sy, w, h, 0, 0, w, h);
+        pdf.addImage(slice.toDataURL('image/png'), 'PNG', M, M + HEADER, w * scale, h * scale, undefined, 'FAST');
+      }
     }
-    downloadBlob(pdf.output('blob'), exportBaseName() + '.pdf');
+    await triggerDownload(exportBaseName() + '.pdf', pdf.output('blob'));
   });
 }
 
@@ -1174,8 +1222,8 @@ function exportXLSX() {
     XLSX.utils.book_append_sheet(wb, wsHol, 'Feriados');
 
     const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-      exportBaseName() + '.xlsx');
+    return triggerDownload(exportBaseName() + '.xlsx',
+      new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   });
 }
 
@@ -1192,7 +1240,7 @@ const IMPORT_COLS = {
   assignees: ['asignados', 'assignees'],
 };
 function normKey(k) {
-  return String(k).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return String(k).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 function ymdOrNull(y, m, d) {
   const dt = new Date(y, m - 1, d);
