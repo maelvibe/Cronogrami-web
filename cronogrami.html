@@ -73,6 +73,20 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 .tb-btn:disabled{opacity:.35;cursor:default;background:transparent;color:var(--fg2)}
 /* Narrow screens: configuration buttons show only their icon (tooltip via title) */
 @media (max-width:1499px){ .tb-btn.tb-compact .tb-label{display:none} }
+/* "Vista" menu: display options, one checkbox per VIEW_OPTIONS entry */
+#view-menu-wrap{position:relative}
+#view-menu{
+  position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:250px;
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.35);
+}
+#view-menu .vm-title{font-size:11px;font-weight:500;color:var(--fg3);text-transform:uppercase;letter-spacing:.45px;padding:4px 8px 6px}
+#view-menu label{
+  display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;
+  font-size:12px;color:var(--fg2);cursor:pointer;user-select:none;
+}
+#view-menu label:hover{background:var(--surface2);color:var(--fg)}
+#view-menu input{width:14px;height:14px;accent-color:var(--accent);cursor:pointer}
 .view-grp{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:7px;overflow:hidden}
 .view-btn{
   padding:5px 11px;border:none;background:transparent;color:var(--fg2);cursor:pointer;
@@ -148,6 +162,8 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 .tr:nth-child(odd){background:var(--row-odd)}
 .tr:hover{background:var(--row-hover)}
 .tr.selected{background:var(--row-selected)!important}
+.tr.overdue{box-shadow:inset 3px 0 0 var(--danger)}
+.tr.overdue .tr-date.end{color:var(--danger);font-weight:600}
 .tr-num{
   width:36px;text-align:center;font-size:11px;color:var(--fg3);
   font-variant-numeric:tabular-nums;flex-shrink:0;
@@ -277,6 +293,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 }
 .m-input:focus{border-color:var(--accent)}
 .m-input.error{border-color:var(--danger)}
+textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .m-2col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .m-checkbox-row{
   display:flex;align-items:center;gap:8px;cursor:pointer;
@@ -611,6 +628,16 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v3.5l2 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
     Hoy
   </button>
+  <div id="view-menu-wrap">
+    <button class="tb-btn" id="view-menu-btn" onclick="toggleViewMenu()" title="Opciones de visualización" aria-haspopup="true" aria-expanded="false">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/></svg>
+      Vista
+    </button>
+    <div id="view-menu" hidden>
+      <div class="vm-title">Visualización</div>
+      <div id="view-menu-items"></div>
+    </div>
+  </div>
 
   <div class="tb-sep"></div>
   <div class="view-grp">
@@ -711,6 +738,10 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
       <div class="m-field" id="m-deps-field" hidden>
         <div class="m-label">Depende de</div>
         <div id="m-deps-wrap"></div>
+      </div>
+      <div class="m-field">
+        <div class="m-label">Notas</div>
+        <textarea id="m-notes" class="m-input" rows="3" placeholder="Notas de la tarea"></textarea>
       </div>
       <div class="m-field" id="m-sprint-field" hidden>
         <div class="m-label">Sprint</div>
@@ -1046,6 +1077,42 @@ let state = {
   redoStack: [],
 };
 const MAX_UNDO = 50;
+
+// Display options in the "Vista" menu. To add one: a new entry here, then read
+// state.viewOpts.<key> where it is drawn. Saved per browser (not in the .cronogrami file).
+const VIEW_OPTIONS = [
+  { key: 'overdueHighlight', label: 'Marcar tareas vencidas en rojo (lista y Gantt)', default: false },
+];
+const VIEW_OPTS_KEY = 'cronogrami.viewOpts';
+state.viewOpts = loadViewOpts();
+function loadViewOpts() {
+  const opts = {};
+  VIEW_OPTIONS.forEach(o => opts[o.key] = o.default);
+  try {
+    const saved = JSON.parse(localStorage.getItem(VIEW_OPTS_KEY) || '{}');
+    VIEW_OPTIONS.forEach(o => { if (typeof saved[o.key] === 'boolean') opts[o.key] = saved[o.key]; });
+  } catch (e) {}
+  return opts;
+}
+function setViewOpt(key, value) {
+  state.viewOpts[key] = value;
+  try { localStorage.setItem(VIEW_OPTS_KEY, JSON.stringify(state.viewOpts)); } catch (e) {}
+  renderLeft(); renderGantt();
+}
+function toggleViewMenu(force) {
+  const menu = document.getElementById('view-menu');
+  const open = force !== undefined ? force : menu.hidden;
+  if (open) {
+    document.getElementById('view-menu-items').innerHTML = VIEW_OPTIONS.map(o =>
+      `<label><input type="checkbox" data-key="${o.key}"${state.viewOpts[o.key] ? ' checked' : ''}
+        onchange="setViewOpt(this.dataset.key, this.checked)">${esc(o.label)}</label>`).join('');
+  }
+  menu.hidden = !open;
+  document.getElementById('view-menu-btn').setAttribute('aria-expanded', String(open));
+}
+document.addEventListener('mousedown', e => {
+  if (!document.getElementById('view-menu').hidden && !e.target.closest('#view-menu-wrap')) toggleViewMenu(false);
+});
 
 const VIEW_PX = { day: 28, week: 22, month: 8 };
 const ROW_H = 28;
@@ -2239,6 +2306,31 @@ function computeRollupDates() {
   return rollup;
 }
 
+// Overdue: a leaf that ends before today with progress < 100 (milestone: not completed);
+// a parent is overdue when any of its descendants is. Display-only, recomputed with the rollup.
+function computeOverdue() {
+  const tasks = (state.project && state.project.tasks) || [];
+  const today = fmtDate(new Date());
+  const children = {};
+  tasks.forEach(t => { if (t.parentId) (children[t.parentId] = children[t.parentId] || []).push(t); });
+  const overdue = new Set();
+  const seen = new Set();
+  function walk(task) {
+    if (seen.has(task.id)) return overdue.has(task.id);
+    seen.add(task.id);
+    const kids = children[task.id];
+    let late;
+    if (kids) late = kids.map(walk).some(Boolean);
+    else if (task.isMilestone) late = !task.milestoneCompleted && !!task.startDate && task.startDate < today;
+    else late = (task.progress || 0) < 100 && !!task.endDate && task.endDate < today;
+    if (late) overdue.add(task.id);
+    return late;
+  }
+  tasks.forEach(walk);
+  return overdue;
+}
+function isOverdue(task) { return !!(state.overdue && state.overdue.has(task.id)); }
+
 function getBarDates(task) {
   const r = state.rollup && state.rollup[task.id];
   return r || { startDate: task.startDate, endDate: task.endDate };
@@ -2465,7 +2557,8 @@ function renderLeft() {
   if (!rows.length) { scroll.innerHTML = ''; return; }
   let html = '';
   rows.forEach(({task, depth, hasKids, forceOpen, searchMatch, ancestorOnly}) => {
-    const sel = (task.id === state.selectedId ? ' selected' : '') + (ancestorOnly ? ' tr-ancestor-only' : '');
+    const late = state.viewOpts.overdueHighlight && isOverdue(task);
+    const sel = (task.id === state.selectedId ? ' selected' : '') + (ancestorOnly ? ' tr-ancestor-only' : '') + (late ? ' overdue' : '');
     const nameClass = task.parentId == null ? ' phase' : (task.isMilestone ? ' milestone' : '');
     const indent = depth * 24;
     const isOpen = forceOpen || state.expanded.has(task.id);
@@ -2513,7 +2606,7 @@ function renderLeft() {
       </div>
       <div class="tr-date w74${sCalc}">${s}</div>
       <div class="tr-date w42">${dur}</div>
-      <div class="tr-date w74${eCalc}">${e}</div>
+      <div class="tr-date w74 end${eCalc}"${late ? ' title="Vencida"' : ''}>${e}</div>
       ${respHtml}
       ${sprintCell}
       ${!task.isMilestone && task.progress > 0 ? `<div class="tr-prog-bar" style="width:${task.progress}%"></div>` : ''}
@@ -2874,6 +2967,7 @@ function renderGantt(tile) {
   });
 
   // Task bars
+  const outlineLate = state.viewOpts.overdueHighlight;
   state.flat.forEach(({task,depth},i) => {
     const bd=getBarDates(task);
     const s=parseDate(bd.startDate), e=parseDate(bd.endDate);
@@ -2896,6 +2990,7 @@ function renderGantt(tile) {
         ctx.fillStyle=hexWithAlpha(color,.15); ctx.fill();
         ctx.strokeStyle=color; ctx.lineWidth=2; ctx.stroke();
       }
+      if (outlineLate && isOverdue(task)) { ctx.strokeStyle='#ef4444'; ctx.lineWidth=2; ctx.stroke(); }
       if (isSelected) { ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke(); }
     } else {
       const barH=isPhase?14:16;
@@ -2911,6 +3006,7 @@ function renderGantt(tile) {
         ctx.fillStyle=hexWithAlpha(color,.5);
         roundRect(ctx,x,barY+barH-4,pw,4,{tl:0,tr:0,bl:r,br:r}); ctx.fill();
       }
+      if (outlineLate && isOverdue(task)) { ctx.strokeStyle='#ef4444';ctx.lineWidth=1.5; roundRect(ctx,x+.75,barY+.75,barW-1.5,barH-1.5,r); ctx.stroke(); }
       if (isSelected) { ctx.strokeStyle='#fff';ctx.lineWidth=1.5; roundRect(ctx,x,barY,barW,barH,r); ctx.stroke(); }
       if (barW>30&&state.pxPerDay>=4) {
         ctx.fillStyle=isPhase?color:'#e2e8f0';
@@ -3122,6 +3218,7 @@ function setupCanvasInteraction() {
       }
     }
     state.rollup = computeRollupDates();
+    state.overdue = computeOverdue();
     calcRange(); renderRuler(); renderGantt();
   });
 
@@ -3294,6 +3391,7 @@ function openModal(taskId) {
     respInput.value = task.responsible || '';
   }
   document.getElementById('m-milestone').checked = !!task.isMilestone;
+  document.getElementById('m-notes').value = task.notes || '';
   // Sprint (field only shown when the project has sprints)
   const sprintsForModal = getSprintsSorted();
   document.getElementById('m-sprint-field').hidden = sprintsForModal.length === 0;
@@ -3360,6 +3458,7 @@ function saveModal() {
     responsible = document.getElementById('m-resp').value.trim();
   }
 
+  const notes = document.getElementById('m-notes').value.trim();
   const sprintId = getSprints().length ? (document.getElementById('m-sprint').value || null) : null;
   let pullAsk = null;
 
@@ -3372,6 +3471,7 @@ function saveModal() {
     task.name = name; task.startDate = startDate; task.endDate = endDate;
     task.duration = duration; task.progress = progress;
     task.responsible = responsible; task.assigneeIds = assigneeIds; task.color = modalColor; task.isMilestone = isMilestone;
+    task.notes = notes;
     const selectedDepIds = new Set();
     document.querySelectorAll('#m-deps-wrap input[type=checkbox]').forEach(cb => { if (cb.checked) selectedDepIds.add(cb.dataset.id); });
     task.dependencies = Array.from(selectedDepIds);
@@ -3392,7 +3492,7 @@ function saveModal() {
     const newTask = {
       id: 'task_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
       taskNum: 0, name, startDate, endDate, duration, progress,
-      responsible, assigneeIds, color: modalColor, parentId, dependencies: [], isMilestone, sprintId
+      responsible, assigneeIds, color: modalColor, parentId, dependencies: [], isMilestone, sprintId, notes
     };
     state.project.tasks.push(newTask);
     state.selectedId = newTask.id;
@@ -3555,7 +3655,10 @@ function setupKeyboard() {
     if (e.key==='Escape' && document.activeElement === searchInput) {
       clearTaskSearch(); searchInput.blur(); e.preventDefault(); return;
     }
-    // Escape: close modal
+    // Escape: close the "Vista" menu, else the modal
+    if (e.key==='Escape' && !document.getElementById('view-menu').hidden) {
+      toggleViewMenu(false); e.preventDefault(); return;
+    }
     if (e.key==='Escape') {
       if (!document.getElementById('modal-overlay').hidden) {
         closeModal(); e.preventDefault(); return;
@@ -3789,6 +3892,7 @@ function rebuildAndRender(scrollTodayOnLoad) {
   calcRange();
   state.flat = buildFlat();
   state.rollup = computeRollupDates();
+  state.overdue = computeOverdue();
   renderLeft();
   renderRuler();
   renderGantt();
