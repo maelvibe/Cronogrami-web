@@ -45,7 +45,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 #logo-text span{color:var(--accent)}
 #project-name{
   flex:1;font-size:12px;color:var(--fg2);overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;max-width:240px;padding:2px 8px;border-radius:5px;
+  white-space:nowrap;max-width:160px;padding:2px 8px;border-radius:5px;
   cursor:text;border:1px solid transparent;outline:none;transition:border-color .15s,background .15s;
 }
 #project-name:hover{background:var(--surface2)}
@@ -53,9 +53,9 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
   border-color:var(--accent);background:var(--surface2);color:var(--fg);
   white-space:normal;overflow:visible;text-overflow:clip;
 }
-.tb-sep{width:1px;height:22px;background:var(--border);margin:0 4px}
+.tb-sep{width:1px;height:22px;background:var(--border);margin:0 2px}
 .tb-btn{
-  display:flex;align-items:center;gap:5px;padding:5px 10px;border:none;
+  display:flex;align-items:center;gap:5px;padding:5px 7px;border:none;
   background:transparent;color:var(--fg2);border-radius:6px;cursor:pointer;
   font-size:12px;font-family:inherit;white-space:nowrap;transition:background .12s,color .12s;
 }
@@ -63,6 +63,8 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 .tb-btn.accent{background:var(--accent);color:#0d1a00;font-weight:600}
 .tb-btn.accent:hover{background:#96da1a}
 .tb-btn svg{flex-shrink:0}
+/* Narrow screens: configuration buttons show only their icon (tooltip via title) */
+@media (max-width:1499px){ .tb-btn.tb-compact .tb-label{display:none} }
 .view-grp{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:7px;overflow:hidden}
 .view-btn{
   padding:5px 11px;border:none;background:transparent;color:var(--fg2);cursor:pointer;
@@ -89,7 +91,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
   background:var(--surface);
 }
 #col-header{
-  display:flex;align-items:center;height:52px;
+  display:flex;align-items:flex-end;height:52px;position:relative;
   background:var(--toolbar);border-bottom:1px solid var(--border);
   flex-shrink:0;
 }
@@ -97,6 +99,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
   font-size:11px;font-weight:500;color:var(--fg3);
   text-transform:uppercase;letter-spacing:.5px;
   padding:0 6px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  line-height:28px;
 }
 .ch-num{width:36px;text-align:center}
 .ch-name{flex:1;min-width:0}
@@ -104,6 +107,14 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 .ch-days{width:42px;text-align:center}
 .ch-end{width:74px}
 .ch-resp{width:86px}
+.ch-sprint,.tr-sprint{width:40px;text-align:center;flex-shrink:0;display:none}
+#left-panel.show-sprint-col .ch-sprint,#left-panel.show-sprint-col .tr-sprint{display:block}
+.tr-sprint{font-size:10px;color:var(--fg3);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
+#sprint-filter{position:absolute;top:8px;left:8px;max-width:calc(100% - 16px);
+  background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg2);
+  font-family:inherit;font-size:11px;padding:3px 6px;outline:none;color-scheme:dark;cursor:pointer}
+#sprint-filter:focus{border-color:var(--accent)}
+#sprint-filter.active{border-color:var(--accent);color:var(--accent)}
 #task-scroll{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
 #task-scroll::-webkit-scrollbar{width:6px}
 #task-scroll::-webkit-scrollbar-track{background:transparent}
@@ -393,6 +404,41 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
   border:2px solid transparent;transition:border-color .12s;flex-shrink:0;
 }
 .pm-color-swatch.active{border-color:#fff}
+/* ── SPRINT MODAL ────────────────────────────────────────── */
+#sprint-modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.65);
+  display:flex;align-items:center;justify-content:center;z-index:500;
+}
+#sprint-modal-overlay[hidden]{display:none!important}
+#sprint-modal{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;width:520px;max-width:calc(100vw - 32px);
+  max-height:85vh;display:flex;flex-direction:column;overflow:hidden;
+}
+.sm-header{display:flex;align-items:center;padding:14px 16px 10px;border-bottom:1px solid var(--border2);gap:10px}
+.sm-title{font-size:14px;font-weight:600;flex:1}
+.sm-body{flex:1;overflow-y:auto;padding:10px 16px 8px}
+.sm-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border2)}
+.sm-row:last-child{border-bottom:none}
+.sm-num{font-size:11px;font-weight:600;color:var(--accent);background:rgba(132,204,22,.12);
+  border-radius:4px;padding:2px 6px;flex-shrink:0;min-width:30px;text-align:center}
+.sm-info{flex:1;min-width:0}
+.sm-name{font-size:12px;font-weight:500;color:var(--fg)}
+.sm-meta{font-size:10px;color:var(--fg3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sm-empty{padding:24px 0;text-align:center;color:var(--fg3);font-size:12px}
+.sm-form{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:12px;margin-top:8px}
+.sm-form.hidden{display:none}
+.sm-form-title{margin-bottom:6px}
+.sm-grid{display:grid;grid-template-columns:70px 1fr;gap:8px;margin-bottom:8px}
+.sm-2col{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.sm-3col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+.sm-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;
+  padding:5px 8px;font-size:12px;color:var(--fg);outline:none;font-family:inherit;color-scheme:dark}
+.sm-input:focus{border-color:var(--accent)}
+.sm-input.error{border-color:var(--danger)}
+.sm-hint{font-size:11px;color:var(--fg3);margin-bottom:8px;line-height:1.4}
+.sm-footer{display:flex;align-items:center;flex-wrap:wrap;padding:10px 16px 14px;border-top:1px solid var(--border2);gap:8px}
+.sm-col-toggle{font-size:12px;padding:0 0 8px;width:100%}
 /* ── Holiday modal ── */
 .hm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;
   display:none;align-items:center;justify-content:center}
@@ -438,14 +484,32 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 .cl-input:focus{border-color:var(--accent)}
 .cl-footer{display:flex;justify-content:flex-end;padding:10px 16px 14px;
   border-top:1px solid var(--border2);gap:8px}
+/* ── Export / Import modal ── */
+.ex-panel{width:420px}
+.ex-section{font-size:11px;color:var(--fg2);font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+.ex-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ex-btn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px;
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--fg);
+  font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .12s,border-color .12s}
+.ex-btn:hover:not(:disabled){background:var(--surface2);border-color:var(--accent)}
+.ex-btn:disabled{opacity:.6;cursor:wait}
+.ex-btn small{font-size:10px;font-weight:400;color:var(--fg3)}
+.ex-import{width:100%;justify-content:center;display:flex;align-items:center;gap:6px}
+.ex-hint{font-size:11px;color:var(--fg3);line-height:1.5}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:600;
+  background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 16px;
+  font-size:12px;color:var(--fg);box-shadow:0 8px 24px rgba(0,0,0,.5);display:none;max-width:90vw}
+#toast.show{display:block}
+#toast.error{border-color:var(--danger);color:#fca5a5}
 /* ── Client badge in toolbar ── */
 #client-badge{
   display:none;align-items:center;gap:5px;padding:3px 9px 3px 7px;
   border-radius:12px;background:rgba(132,204,22,.15);border:1px solid rgba(132,204,22,.35);
-  font-size:11px;color:var(--accent);cursor:pointer;white-space:nowrap;max-width:140px;
+  font-size:11px;color:var(--accent);cursor:pointer;white-space:nowrap;max-width:110px;
   overflow:hidden;text-overflow:ellipsis
 }
 #client-badge svg{flex-shrink:0}
+#client-badge-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
 #client-badge:hover{background:rgba(132,204,22,.25)}
 
 </style>
@@ -475,21 +539,29 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13 11v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     Guardar
   </button>
-  <button class="tb-btn" onclick="openTeamModal()">
+  <button class="tb-btn tb-compact" onclick="openTeamModal()" title="Equipo">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="5" r="2.3" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 13c0-2.2 2-4 4.5-4s4.5 1.8 4.5 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="11.5" cy="5" r="1.8" stroke="currentColor" stroke-width="1.3"/><path d="M13.5 12.5c0-1.5-1.1-2.75-2.5-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-    Equipo
+    <span class="tb-label">Equipo</span>
   </button>
-  <button class="tb-btn" onclick="openPhasesModal()">
+  <button class="tb-btn tb-compact" onclick="openPhasesModal()" title="Fases">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M6 4V3M10 4V3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5 8h2M9 8h2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-    Fases
+    <span class="tb-label">Fases</span>
   </button>
-  <button class="tb-btn" onclick="openHolidayModal()">
+  <button class="tb-btn tb-compact" onclick="openHolidayModal()" title="Feriados">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 2v2M11 2v2M2 7h12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11" r="1.5" fill="#ef4444"/></svg>
-    Feriados
+    <span class="tb-label">Feriados</span>
   </button>
-  <button class="tb-btn" onclick="openClientModal()">
+  <button class="tb-btn tb-compact" onclick="openSprintModal()" title="Sprints">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 14V2.5M3.5 3h8.5l-2 3 2 3H3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="tb-label">Sprints</span>
+  </button>
+  <button class="tb-btn tb-compact" onclick="openClientModal()" title="Cliente">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="4" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M1.5 8.5h13" stroke="currentColor" stroke-width="1.3"/></svg>
-    Cliente
+    <span class="tb-label">Cliente</span>
+  </button>
+  <button class="tb-btn" onclick="openExportModal()">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 11V2M4.5 5.5L8 2l3.5 3.5M3 10v3a1 1 0 001 1h8a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Exportar
   </button>
 
   <div class="tb-sep"></div>
@@ -522,12 +594,14 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 <div id="app-body">
   <div id="left-panel" style="width:420px">
     <div id="col-header">
+      <select id="sprint-filter" hidden onchange="setSprintFilter(this.value)" title="Filtrar por sprint"></select>
       <div class="ch ch-num">#</div>
       <div class="ch ch-name">Nombre</div>
       <div class="ch ch-start">Inicio</div>
       <div class="ch ch-days">Días</div>
       <div class="ch ch-end">Fin</div>
       <div class="ch ch-resp">Resp.</div>
+      <div class="ch ch-sprint" title="Sprint">Spr.</div>
     </div>
     <div id="task-scroll"></div>
   </div>
@@ -588,6 +662,10 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
         <div class="m-label">Responsable</div>
         <div id="m-assignees-wrap" hidden></div>
         <input type="text" id="m-resp" class="m-input" autocomplete="off" placeholder="Nombre del responsable">
+      </div>
+      <div class="m-field" id="m-sprint-field" hidden>
+        <div class="m-label">Sprint</div>
+        <select id="m-sprint" class="m-input"></select>
       </div>
       <div class="m-field">
         <div class="m-label">Color</div>
@@ -702,6 +780,84 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
   </div>
 </div>
 
+<!-- ── SPRINT MODAL ──────────────────────────────────────── -->
+<div id="sprint-modal-overlay" hidden>
+  <div id="sprint-modal">
+    <div class="sm-header">
+      <span class="sm-title">Sprints del proyecto</span>
+      <button class="tm-icon-btn" onclick="closeSprintModal()" title="Cerrar">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="sm-body">
+      <div id="sm-list-body"><!-- renderSprintList() --></div>
+      <div class="sm-form hidden" id="sm-form">
+        <div class="m-label sm-form-title" id="sm-form-title">Nuevo sprint</div>
+        <div class="sm-grid">
+          <div class="m-field">
+            <div class="m-label">Número</div>
+            <input type="number" id="sm-number" class="sm-input" min="1" step="1">
+          </div>
+          <div class="m-field">
+            <div class="m-label">Nombre</div>
+            <input type="text" id="sm-name" class="sm-input" autocomplete="off">
+          </div>
+        </div>
+        <div class="sm-2col">
+          <div class="m-field">
+            <div class="m-label">Inicio</div>
+            <input type="date" id="sm-start" class="sm-input">
+          </div>
+          <div class="m-field">
+            <div class="m-label">Fin</div>
+            <input type="date" id="sm-end" class="sm-input">
+          </div>
+        </div>
+        <div class="m-field" style="margin-bottom:8px">
+          <div class="m-label">Objetivo</div>
+          <input type="text" id="sm-goal" class="sm-input" autocomplete="off" placeholder="Opcional">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-ghost" style="flex:1" onclick="cancelSprintForm()">Cancelar</button>
+          <button class="btn-primary" style="flex:1" id="sm-save-btn" onclick="confirmSprintForm()">Agregar</button>
+        </div>
+      </div>
+      <div class="sm-form hidden" id="sm-gen-form">
+        <div class="m-label sm-form-title">Autogenerar sprints</div>
+        <div class="sm-hint">Crea sprints consecutivos y reemplaza los existentes.</div>
+        <div class="sm-3col">
+          <div class="m-field">
+            <div class="m-label">Inicio</div>
+            <input type="date" id="sm-gen-start" class="sm-input" onchange="updateAutogenCount()">
+          </div>
+          <div class="m-field">
+            <div class="m-label">Días c/u</div>
+            <input type="number" id="sm-gen-days" class="sm-input" min="1" step="1" oninput="updateAutogenCount()">
+          </div>
+          <div class="m-field">
+            <div class="m-label">Cantidad</div>
+            <input type="number" id="sm-gen-count" class="sm-input" min="1" step="1">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-ghost" style="flex:1" onclick="cancelAutogen()">Cancelar</button>
+          <button class="btn-primary" style="flex:1" onclick="generateSprints()">Generar</button>
+        </div>
+      </div>
+    </div>
+    <div class="sm-footer">
+      <label class="m-checkbox-row sm-col-toggle">
+        <input type="checkbox" id="sm-show-col" onchange="toggleSprintColumn(this.checked)">
+        <span>Mostrar columna "Sprint" en la lista de tareas</span>
+      </label>
+      <button class="btn-ghost" id="sm-add-btn" onclick="showSprintForm()">+ Agregar sprint</button>
+      <button class="btn-ghost" id="sm-gen-btn" onclick="showAutogenForm()">Autogenerar sprints</button>
+      <div style="flex:1"></div>
+      <button class="btn-primary" onclick="closeSprintModal()">Listo</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── HOLIDAY MODAL ─────────────────────────────────────── -->
 <div class="hm-overlay" id="holiday-modal-overlay">
   <div class="hm-panel">
@@ -764,7 +920,41 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
   </div>
 </div>
 
+<!-- ── EXPORT / IMPORT MODAL ─────────────────────────────── -->
+<div class="cl-overlay" id="export-modal-overlay">
+  <div class="cl-panel ex-panel">
+    <div class="cl-header">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2M4.5 5.5L8 2l3.5 3.5M3 10v3a1 1 0 001 1h8a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="cl-title">Exportar / Importar</div>
+      <button class="btn-ghost" onclick="closeExportModal()" style="padding:2px 8px">✕</button>
+    </div>
+    <div class="cl-body">
+      <div class="ex-section">Exportar cronograma</div>
+      <div class="ex-grid">
+        <button class="ex-btn" id="ex-btn-png" onclick="exportPNG()">PNG<small>Imagen</small></button>
+        <button class="ex-btn" id="ex-btn-pdf" onclick="exportPDF()">PDF<small>Documento</small></button>
+        <button class="ex-btn" id="ex-btn-xlsx" onclick="exportXLSX()">XLSX<small>Excel</small></button>
+      </div>
+      <div class="ex-section" style="margin-top:6px">Importar</div>
+      <button class="btn-ghost ex-import" id="ex-btn-import" onclick="document.getElementById('ex-import-input').click()">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v9M4.5 7.5L8 11l3.5-3.5M3 10v3a1 1 0 001 1h8a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Importar tareas (.xlsx)
+      </button>
+      <input type="file" id="ex-import-input" accept=".xlsx,.xls,.csv" style="display:none"
+        onchange="if(this.files[0]) importXLSX(this.files[0]); this.value=''">
+      <div class="ex-hint">Columnas reconocidas: Nombre, Inicio, Fin (obligatorias), Progreso, Notas, Hito, Fase y Asignados. Las tareas se agregan al final del proyecto.</div>
+    </div>
+    <div class="cl-footer">
+      <button class="btn-primary" onclick="closeExportModal()">Cerrar</button>
+    </div>
+  </div>
+</div>
 
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- NOTA PARA PUBLICAR: este archivo necesita capabilities: { downloads: true } al publicarse como artifact de Claude -->
 <script>
 // ═══════════════════════════════════════════════════════════
 // STATE
@@ -780,12 +970,16 @@ let state = {
   expanded: new Set(),
   chartStart: null,
   chartEnd: null,
+  sprintFilter: '',      // sprint id shown alone in the list/gantt ('' = all)
+  showSprintCol: true,   // "Sprint" column in the task list (only when sprints exist)
+  listBaseWidth: 420,    // task list width without the Sprint column (user-resizable)
 };
 
 const VIEW_PX = { day: 28, week: 22, month: 8 };
 const ROW_H = 28;
 const PHASE_H  = 24;          // phase band strip height (px)
-const HEADER_H = 52 + PHASE_H; // ruler canvas total height (date rows + phase band)
+const HEADER_H = 52 + PHASE_H; // ruler canvas height without sprints (date rows + phase band)
+const SPRINT_H = 18;           // sprint band below the phase band (only when sprints exist)
 
 // ═══════════════════════════════════════════════════════════
 // DEMO PROJECT (datos ficticios de ejemplo)
@@ -958,6 +1152,333 @@ function updateClientBadge() {
   }
 }
 // ═══════════════════════════════════════════════════════════
+// EXPORT / IMPORT MODAL
+// ═══════════════════════════════════════════════════════════
+function openExportModal() {
+  document.getElementById('export-modal-overlay').classList.add('open');
+}
+function closeExportModal() {
+  document.getElementById('export-modal-overlay').classList.remove('open');
+}
+
+let toastTimer = null;
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.toggle('error', !!isError);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+// Shows "..." on the button while fn runs, then restores it
+async function withLoading(btnId, fn) {
+  const btn = document.getElementById(btnId);
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = '...';
+  await new Promise(r => setTimeout(r, 30)); // let the loading state paint
+  try { await fn(); }
+  catch (err) { console.error('Export/import error', err); showToast('Error: ' + (err?.message || err), true); }
+  finally { btn.disabled = false; btn.innerHTML = orig; }
+}
+
+function exportBaseName() {
+  // ASCII-only: browsers drop the download name ("download") when it has accents or dashes like "–"
+  const name = (state.project?.project_name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u2013\u2014]/g, '-').replace(/[^A-Za-z0-9 ._-]+/g, '_').trim() || 'proyecto';
+  return 'cronograma-' + name;
+}
+// True when the page runs inside a Claude artifact
+function isClaudeArtifact() {
+  return !!(window.__claudeArtifact__ || location.hostname.includes('claude.ai') || window.claude);
+}
+// Saves a generated file. Inside a Claude artifact published with capabilities
+// { downloads: true } it goes through the platform's downloads API (the sandbox
+// blocks <a download>); otherwise it falls back to a regular link download.
+async function triggerDownload(filename, blob) {
+  // use('downloads') resolves null when the artifact wasn't published with that capability
+  if (isClaudeArtifact() && typeof window.claude?.use === 'function') {
+    let downloads = null;
+    try { downloads = await window.claude.use('downloads'); } catch (e) { /* fallback */ }
+    if (downloads) {
+      try {
+        await downloads.save({ filename, data: blob });
+        return;
+      } catch (err) {
+        // The viewer said no: respect it instead of forcing another download
+        if (err?.code === 'declined') return;
+        if (err?.code === 'rate_limited') throw new Error('Ya hay una descarga pendiente de confirmar.');
+        console.warn('downloads.save failed, using link fallback', err);
+      }
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function canvasToBlob(canvas) {
+  return new Promise((resolve, reject) =>
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('No se pudo generar la imagen.')), 'image/png'));
+}
+function hasTasksToExport() {
+  if (state.project && (state.project.tasks || []).length) return true;
+  showToast('No hay tareas para exportar.', true);
+  return false;
+}
+
+// ─── PNG ─────────────────────────────────────────────────
+const EXPORT_TITLE_H = 40;
+// Title bar + ruler + gantt (only the rows in use) combined in one offscreen canvas
+function buildExportCanvas() {
+  rebuildAndRender(false); // make sure both canvases reflect the current state
+  const ruler = document.getElementById('ruler-canvas');
+  const gantt = document.getElementById('gantt-canvas');
+  const w  = Math.max(ruler.width, gantt.width);
+  const gh = Math.min(gantt.height, Math.max(state.flat.length, 1) * ROW_H);
+  const out = document.createElement('canvas');
+  out.width = w; out.height = EXPORT_TITLE_H + ruler.height + gh;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = '#0f1a2d'; ctx.fillRect(0, 0, w, EXPORT_TITLE_H);
+  ctx.fillStyle = '#ffffff'; ctx.font = '600 16px Inter,system-ui';
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  ctx.fillText(state.project?.project_name || 'Proyecto', 12, EXPORT_TITLE_H / 2);
+  ctx.drawImage(ruler, 0, EXPORT_TITLE_H);
+  ctx.drawImage(gantt, 0, 0, gantt.width, gh, 0, EXPORT_TITLE_H + ruler.height, gantt.width, gh);
+  return out;
+}
+
+function exportPNG() {
+  if (!hasTasksToExport()) return;
+  return withLoading('ex-btn-png', async () => {
+    const canvas = buildExportCanvas();
+    await triggerDownload(exportBaseName() + '.png', await canvasToBlob(canvas));
+  });
+}
+
+// ─── PDF ─────────────────────────────────────────────────
+// Native resolution for paginated output: 72 dpi → 1 mm ≈ 2.835 canvas px
+const PDF_PX_PER_MM = 72 / 25.4;
+// Smallest scale (mm per canvas px) that still fits the chart on one page: below it the
+// 11 px bar labels drop under ~5 pt, so the chart is paginated at native size instead
+const PDF_MIN_FIT_SCALE = 0.16;
+
+function exportPDF() {
+  if (!hasTasksToExport()) return;
+  if (!window.jspdf) { showToast('No se pudo cargar la librería de PDF (jsPDF).', true); return; }
+  return withLoading('ex-btn-pdf', async () => {
+    const img = buildExportCanvas();
+    const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
+    const pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
+    const M = 10, HEADER = 10;
+    const availW = pageW - 2 * M, availH = pageH - 2 * M - HEADER;
+    // Readable when fitted to the page width → one page wide (never enlarged past 96 dpi).
+    // Otherwise native resolution, cut into vertical strips of one page width each.
+    const fitScale = Math.min(availW / img.width, 25.4 / 96);
+    const scale = fitScale >= PDF_MIN_FIT_SCALE ? fitScale : 1 / PDF_PX_PER_MM;
+    const colW = Math.max(1, Math.floor(availW / scale)); // canvas px per page, horizontally
+    const rowH = Math.max(1, Math.floor(availH / scale)); // canvas px per page, vertically
+    // The export canvas is: title bar + ruler + task rows. Pages after the first row
+    // repeat the ruler on top, so they fit rulerH fewer px of task rows.
+    const rulerH = document.getElementById('ruler-canvas').height;
+    const rowsPerNextPage = Math.max(1, rowH - rulerH);
+    const rows = img.height <= rowH ? 1 : 1 + Math.ceil((img.height - rowH) / rowsPerNextPage);
+    const cols = Math.ceil(img.width / colW);
+    const pages = cols * rows;
+    const name = state.project?.project_name || 'Proyecto';
+    const generated = 'Generado: ' + new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    let page = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        page++;
+        if (page > 1) pdf.addPage();
+        pdf.setTextColor(20, 20, 20);
+        const pageLabel = `Página ${page}/${pages}`;
+        if (page === 1) {
+          pdf.setFontSize(14); pdf.text(name, M, M + 5);
+          pdf.setFontSize(9);
+          pdf.text(generated + (pages > 1 ? '  ·  ' + pageLabel : ''), pageW - M, M + 5, { align: 'right' });
+        } else {
+          pdf.setFontSize(9); pdf.text(pageLabel, pageW - M, M + 5, { align: 'right' });
+        }
+        // The last column/row can be narrower/shorter than a full page
+        const sx = c * colW;
+        const w = Math.min(colW, img.width - sx);
+        const slice = document.createElement('canvas');
+        const sctx = slice.getContext('2d');
+        if (r === 0) {
+          const h = Math.min(rowH, img.height);
+          slice.width = w; slice.height = h;
+          sctx.drawImage(img, sx, 0, w, h, 0, 0, w, h);
+        } else {
+          // Same ruler segment as the first row of this column, then the next block of rows
+          const sy = rowH + (r - 1) * rowsPerNextPage;
+          const h = Math.min(rowsPerNextPage, img.height - sy);
+          slice.width = w; slice.height = rulerH + h;
+          sctx.drawImage(img, sx, EXPORT_TITLE_H, w, rulerH, 0, 0, w, rulerH);
+          sctx.drawImage(img, sx, sy, w, h, 0, rulerH, w, h);
+        }
+        pdf.addImage(slice.toDataURL('image/png'), 'PNG', M, M + HEADER, w * scale, slice.height * scale, undefined, 'FAST');
+      }
+    }
+    await triggerDownload(exportBaseName() + '.pdf', pdf.output('blob'));
+  });
+}
+
+// ─── XLSX ────────────────────────────────────────────────
+const XLSX_TASK_COLS = ['ID', 'Nombre', 'Inicio', 'Fin', 'Duración (días)', 'Fase', 'Asignados', 'Progreso (%)', 'Hito', 'Notas', 'Sprint'];
+
+function taskIsMilestone(t) { return !!(t.isMilestone ?? t.milestone); }
+function taskDurationDays(t) {
+  if (taskIsMilestone(t)) return 0;
+  const d = t.duration ?? t.durationDays;
+  if (d != null && d !== '') return Number(d) || 0;
+  const s = parseDate(t.startDate || t.start), e = parseDate(t.endDate || t.end);
+  return s && e ? diffDays(s, e) : '';
+}
+function taskAssigneeNames(t) {
+  const names = (t.assigneeIds || t.assignees || []).map(id => getTeamMember(id)?.name).filter(Boolean);
+  return names.length ? names.join(', ') : (t.responsible || '');
+}
+
+function exportXLSX() {
+  if (!hasTasksToExport()) return;
+  if (!window.XLSX) { showToast('No se pudo cargar la librería de Excel (SheetJS).', true); return; }
+  return withLoading('ex-btn-xlsx', () => {
+    const phases = getPhases();
+    const taskRows = state.project.tasks.map(t => {
+      const phase = phases.find(p => p.id === (t.phaseId ?? t.phase_id));
+      // Sprint name; unnamed sprints (e.g. autogenerated) export as "Sprint N"
+      const sprint = t.sprintId ? getSprintById(t.sprintId) : null;
+      return {
+        'ID': t.id,
+        'Nombre': t.name || '',
+        'Inicio': t.startDate || t.start || '',
+        'Fin': t.endDate || t.end || '',
+        'Duración (días)': taskDurationDays(t),
+        'Fase': phase ? phase.name : '',
+        'Asignados': taskAssigneeNames(t),
+        'Progreso (%)': Number(t.progress) || 0,
+        'Hito': taskIsMilestone(t) ? 'Sí' : 'No',
+        'Notas': t.notes || '',
+        'Sprint': sprint ? sprintDisplayName(sprint) : '',
+      };
+    });
+    const holidayRows = getHolidays().map(h => ({ 'Fecha': h.date, 'Nombre': h.name || '' }));
+
+    const wb = XLSX.utils.book_new();
+    const wsTasks = XLSX.utils.json_to_sheet(taskRows, { header: XLSX_TASK_COLS });
+    wsTasks['!cols'] = [12, 36, 12, 12, 14, 18, 28, 12, 7, 30, 16].map(wch => ({ wch }));
+    XLSX.utils.book_append_sheet(wb, wsTasks, 'Tareas');
+    const wsHol = XLSX.utils.json_to_sheet(holidayRows, { header: ['Fecha', 'Nombre'] });
+    wsHol['!cols'] = [{ wch: 12 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, wsHol, 'Feriados');
+
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    return triggerDownload(exportBaseName() + '.xlsx',
+      new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  });
+}
+
+// ─── IMPORT XLSX ─────────────────────────────────────────
+// Header aliases, compared after normKey() (lowercase, no accents, no spaces/symbols)
+const IMPORT_COLS = {
+  name:      ['nombre', 'name', 'tarea'],
+  start:     ['inicio', 'start', 'fechainicio'],
+  end:       ['fin', 'end', 'fechafin'],
+  progress:  ['progreso', 'progress'],
+  notes:     ['notas', 'notes'],
+  milestone: ['hito', 'milestone'],
+  phase:     ['fase', 'phase'],
+  assignees: ['asignados', 'assignees'],
+};
+function normKey(k) {
+  return String(k).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+function ymdOrNull(y, m, d) {
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d ? fmtDate(dt) : null;
+}
+// Accepts YYYY-MM-DD, DD/MM/YYYY, Excel date serials and Date objects → "YYYY-MM-DD"
+function parseImportDate(v) {
+  if (v == null || v === '') return null;
+  if (v instanceof Date) return isNaN(v) ? null : fmtDate(v);
+  if (typeof v === 'number') {
+    const d = XLSX.SSF.parse_date_code(v);
+    return d ? ymdOrNull(d.y, d.m, d.d) : null;
+  }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return ymdOrNull(+m[1], +m[2], +m[3]);
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return ymdOrNull(+m[3], +m[2], +m[1]);
+  return null;
+}
+function isTruthyCell(v) {
+  return v === true || ['si', 'yes', 'true', '1'].includes(normKey(v ?? ''));
+}
+
+function importXLSX(file) {
+  if (!window.XLSX) { showToast('No se pudo cargar la librería de Excel (SheetJS).', true); return; }
+  return withLoading('ex-btn-import', async () => {
+    // CSV is decoded as UTF-8 text (accents); raw:true keeps DD/MM/YYYY from being misread as a US date
+    const wb = /\.csv$/i.test(file.name)
+      ? XLSX.read(await file.text(), { type: 'string', raw: true })
+      : XLSX.read(await file.arrayBuffer(), { type: 'array', raw: true });
+    const sheetName = wb.SheetNames.find(n => normKey(n) === 'tareas') || wb.SheetNames[0];
+    if (!sheetName) throw new Error('El archivo no tiene hojas.');
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '', raw: true });
+
+    ensureProject();
+    const phases = getPhases(), team = getTeam();
+    const stamp = Date.now();
+    let added = 0, skipped = 0;
+    rows.forEach((row, index) => {
+      const f = {};
+      Object.entries(row).forEach(([k, v]) => {
+        const nk = normKey(k);
+        for (const [field, aliases] of Object.entries(IMPORT_COLS)) {
+          if (f[field] === undefined && aliases.includes(nk)) f[field] = v;
+        }
+      });
+      const name = String(f.name ?? '').trim();
+      const start = parseImportDate(f.start);
+      const isMilestone = isTruthyCell(f.milestone);
+      let end = parseImportDate(f.end);
+      if (!name || !start || !end) { skipped++; return; }
+      if (isMilestone) end = start;
+      if (end < start) { skipped++; return; }
+
+      const phase = f.phase ? phases.find(p => normKey(p.name) === normKey(f.phase)) : null;
+      const names = String(f.assignees ?? '').split(',').map(x => x.trim()).filter(Boolean);
+      const assigneeIds = names.map(n => team.find(m => normKey(m.name) === normKey(n))?.id).filter(Boolean);
+      const progress = Math.max(0, Math.min(100, Math.round(parseFloat(f.progress) || 0)));
+      state.project.tasks.push({
+        id: 't_' + stamp + '_' + index,
+        taskNum: 0, name, startDate: start, endDate: end,
+        duration: isMilestone ? 0 : diffDays(parseDate(start), parseDate(end)),
+        progress: isMilestone ? 0 : progress,
+        responsible: assigneeIds.length ? '' : names.join(', '),
+        assigneeIds,
+        color: phase?.color || '#3b82f6',
+        parentId: null, phaseId: phase?.id || null,
+        dependencies: [], isMilestone,
+        notes: String(f.notes ?? '').trim(),
+      });
+      added++;
+    });
+
+    renumberTasks();
+    rebuildAndRender(true);
+    showToast(`${added} tareas importadas. ${skipped} filas omitidas.`, added === 0);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
 // TEAM MODAL
 // ═══════════════════════════════════════════════════════════
 function openTeamModal() {
@@ -1102,6 +1623,60 @@ function getHolidayDatesInRange() {
   return out;
 }
 
+// ─── Sprints ─────────────────────────────────────────────
+function getSprints() {
+  if (!state.project) return [];
+  if (!state.project.sprints) state.project.sprints = [];
+  return state.project.sprints;
+}
+function getSprintsSorted() {
+  return [...getSprints()].sort((a, b) =>
+    (Number(a.number) || 0) - (Number(b.number) || 0) || String(a.startDate || '').localeCompare(String(b.startDate || '')));
+}
+function getSprintById(id) {
+  return getSprints().find(sp => sp.id === id) || null;
+}
+function sprintShort(sp) { return 'S' + sp.number; }
+function sprintDisplayName(sp) { return (sp.name && sp.name.trim()) || 'Sprint ' + sp.number; }
+function sprintOptionLabel(sp) {
+  return esc(sprintShort(sp)) + (sp.name && sp.name.trim() ? ' · ' + esc(sp.name.trim()) : '');
+}
+function escAttr(s) { return esc(String(s ?? '')).replace(/"/g, '&quot;'); }
+// Ruler height: date rows + phase band, plus the sprint band only when there are sprints
+function rulerHeight() {
+  return HEADER_H + (getSprints().length ? SPRINT_H : 0);
+}
+// Sprint filter options + "Sprint" column visibility, kept in sync on every render
+function refreshSprintUI() {
+  const sprints = getSprintsSorted();
+  if (state.sprintFilter && !getSprintById(state.sprintFilter)) state.sprintFilter = '';
+  const sel = document.getElementById('sprint-filter');
+  sel.hidden = sprints.length === 0;
+  sel.innerHTML = '<option value="">Sprint: Todos</option>' +
+    sprints.map(sp => `<option value="${escAttr(sp.id)}">${sprintOptionLabel(sp)}</option>`).join('');
+  sel.value = state.sprintFilter;
+  sel.classList.toggle('active', !!state.sprintFilter);
+  const panel = document.getElementById('left-panel');
+  panel.classList.toggle('show-sprint-col', isSprintColumnVisible());
+  panel.style.width = getTaskListWidth() + 'px';
+}
+function isSprintColumnVisible() {
+  return getSprints().length > 0 && state.showSprintCol;
+}
+// Task list width: the user's base width plus room for the Sprint column when it's shown
+const SPRINT_COL_W = 40;
+function getTaskListWidth() {
+  return state.listBaseWidth + (isSprintColumnVisible() ? SPRINT_COL_W : 0);
+}
+function setSprintFilter(id) {
+  state.sprintFilter = id || '';
+  rebuildAndRender();
+}
+function toggleSprintColumn(on) {
+  state.showSprintCol = !!on;
+  rebuildAndRender(); // applies the new list width and redraws the gantt for the new space
+}
+
 function openPhasesModal() {
   ensureProject();
   phaseColor = PHASE_COLORS[getPhases().length % PHASE_COLORS.length];
@@ -1200,6 +1775,199 @@ function deletePhase(id) {
   renderRuler();
 }
 
+// ═══════════════════════════════════════════════════════════
+// SPRINT MODAL
+// ═══════════════════════════════════════════════════════════
+let sprintEditId = null; // id of the sprint being edited in the inline form (null = new)
+
+function openSprintModal() {
+  ensureProject();
+  renderSprintList();
+  cancelSprintForm();
+  cancelAutogen();
+  document.getElementById('sm-show-col').checked = state.showSprintCol;
+  document.getElementById('sprint-modal-overlay').hidden = false;
+}
+
+function closeSprintModal() {
+  document.getElementById('sprint-modal-overlay').hidden = true;
+  rebuildAndRender();
+}
+
+function renderSprintList() {
+  const body = document.getElementById('sm-list-body');
+  const sprints = getSprintsSorted();
+  if (sprints.length === 0) {
+    body.innerHTML = '<div class="sm-empty">Sin sprints. Agregá uno o usá "Autogenerar sprints".</div>';
+    return;
+  }
+  body.innerHTML = sprints.map(sp => {
+    const s = parseDate(sp.startDate), e = parseDate(sp.endDate);
+    const dates = `${s ? fmtShort(s) : '—'} → ${e ? fmtShort(e) : '—'}`;
+    return `
+    <div class="sm-row">
+      <span class="sm-num">${esc(sprintShort(sp))}</span>
+      <div class="sm-info">
+        <div class="sm-name">${esc(sprintDisplayName(sp))}</div>
+        <div class="sm-meta" title="${escAttr(sp.goal)}">${dates}${sp.goal ? ' · ' + esc(sp.goal) : ''}</div>
+      </div>
+      <button class="tm-icon-btn" data-id="${escAttr(sp.id)}" onclick="showSprintForm(this.dataset.id)" title="Editar sprint">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M11 2.5l2.5 2.5L6 12.5H3.5V10L11 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="tm-icon-btn danger" data-id="${escAttr(sp.id)}" onclick="deleteSprint(this.dataset.id)" title="Eliminar sprint">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function setSprintFooterButtons(visible) {
+  document.getElementById('sm-add-btn').hidden = !visible;
+  document.getElementById('sm-gen-btn').hidden = !visible;
+}
+
+// Inline add/edit form. editId = sprint to edit; empty = new sprint
+function showSprintForm(editId) {
+  cancelAutogen();
+  sprintEditId = editId || null;
+  const sp = sprintEditId ? getSprintById(sprintEditId) : null;
+  const numEl = document.getElementById('sm-number'), nameEl = document.getElementById('sm-name');
+  let number, start, end;
+  if (sp) {
+    number = sp.number; start = sp.startDate || ''; end = sp.endDate || '';
+  } else {
+    // Next number; dates continue after the latest sprint (2 weeks long by default)
+    const sprints = getSprints();
+    number = sprints.reduce((m, x) => Math.max(m, Number(x.number) || 0), 0) + 1;
+    const lastEnd = sprints.map(x => x.endDate).filter(Boolean).sort().pop();
+    const s = lastEnd ? addDays(parseDate(lastEnd), 1) : new Date();
+    start = fmtDate(s); end = fmtDate(addDays(s, 13));
+  }
+  numEl.value = number;
+  nameEl.value = sp ? (sp.name || '') : '';
+  nameEl.placeholder = 'Sprint ' + number;
+  numEl.oninput = () => { nameEl.placeholder = 'Sprint ' + (numEl.value || '?'); };
+  document.getElementById('sm-start').value = start;
+  document.getElementById('sm-end').value = end;
+  document.getElementById('sm-goal').value = sp ? (sp.goal || '') : '';
+  ['sm-number', 'sm-start', 'sm-end'].forEach(id => document.getElementById(id).classList.remove('error'));
+  document.getElementById('sm-form-title').textContent = sp ? 'Editar sprint ' + sprintShort(sp) : 'Nuevo sprint';
+  document.getElementById('sm-save-btn').textContent = sp ? 'Guardar' : 'Agregar';
+  document.getElementById('sm-form').classList.remove('hidden');
+  setSprintFooterButtons(false);
+  nameEl.focus();
+}
+
+function cancelSprintForm() {
+  sprintEditId = null;
+  document.getElementById('sm-form').classList.add('hidden');
+  setSprintFooterButtons(true);
+}
+
+function confirmSprintForm() {
+  const numEl = document.getElementById('sm-number');
+  const startEl = document.getElementById('sm-start'), endEl = document.getElementById('sm-end');
+  [numEl, startEl, endEl].forEach(el => el.classList.remove('error'));
+  const number = parseInt(numEl.value, 10);
+  const start = startEl.value, end = endEl.value;
+  if (!(number >= 1)) { numEl.classList.add('error'); numEl.focus(); return; }
+  if (!start || !end || start >= end) {
+    startEl.classList.add('error'); endEl.classList.add('error');
+    showToast('La fecha de inicio tiene que ser anterior a la de fin.', true);
+    return;
+  }
+  // Overlaps and repeated numbers are only warned about, not blocked
+  const others = getSprints().filter(x => x.id !== sprintEditId);
+  const overlapping = others.filter(x => x.startDate && x.endDate && start <= x.endDate && x.startDate <= end);
+  const repeatedNumber = others.some(x => Number(x.number) === number);
+
+  const data = {
+    number,
+    name: document.getElementById('sm-name').value.trim(),
+    startDate: start, endDate: end,
+    goal: document.getElementById('sm-goal').value.trim(),
+  };
+  const editing = sprintEditId ? getSprintById(sprintEditId) : null;
+  if (editing) Object.assign(editing, data);
+  else getSprints().push({ id: 'sp_' + Date.now(), ...data });
+
+  cancelSprintForm();
+  renderSprintList();
+  rebuildAndRender();
+
+  const warnings = [];
+  if (overlapping.length) warnings.push('se superpone con ' + overlapping.map(sprintShort).join(', '));
+  if (repeatedNumber) warnings.push('tiene el mismo número que otro sprint');
+  if (warnings.length) showToast('Atención: el sprint ' + warnings.join(' y ') + '.', true);
+}
+
+function deleteSprint(id) {
+  const sprints = getSprints();
+  const idx = sprints.findIndex(sp => sp.id === id);
+  if (idx === -1) return;
+  sprints.splice(idx, 1);
+  // Tasks of the deleted sprint go back to "no sprint"
+  (state.project.tasks || []).forEach(t => { if (t.sprintId === id) t.sprintId = null; });
+  if (sprintEditId === id) cancelSprintForm();
+  renderSprintList();
+  rebuildAndRender();
+}
+
+// ─── Autogenerate ────────────────────────────────────────
+function showAutogenForm() {
+  cancelSprintForm();
+  document.getElementById('sm-gen-start').value = fmtDate(state.chartStart || new Date());
+  document.getElementById('sm-gen-days').value = 14;
+  updateAutogenCount();
+  document.getElementById('sm-gen-form').classList.remove('hidden');
+  setSprintFooterButtons(false);
+}
+
+function cancelAutogen() {
+  document.getElementById('sm-gen-form').classList.add('hidden');
+  setSprintFooterButtons(true);
+}
+
+// Default count: enough sprints to reach the end of the chart
+function updateAutogenCount() {
+  const start = parseDate(document.getElementById('sm-gen-start').value);
+  const days = parseInt(document.getElementById('sm-gen-days').value, 10);
+  if (!start || !(days >= 1) || !state.chartEnd) return;
+  document.getElementById('sm-gen-count').value = Math.max(1, Math.ceil((diffDays(start, state.chartEnd) + 1) / days));
+}
+
+function generateSprints() {
+  const startEl = document.getElementById('sm-gen-start');
+  const daysEl = document.getElementById('sm-gen-days'), countEl = document.getElementById('sm-gen-count');
+  [startEl, daysEl, countEl].forEach(el => el.classList.remove('error'));
+  const start = parseDate(startEl.value);
+  const days = parseInt(daysEl.value, 10), count = parseInt(countEl.value, 10);
+  if (!start) { startEl.classList.add('error'); return; }
+  if (!(days >= 2 && days <= 365)) { daysEl.classList.add('error'); showToast('La duración tiene que ser de 2 a 365 días.', true); return; }
+  if (!(count >= 1 && count <= 200)) { countEl.classList.add('error'); showToast('La cantidad tiene que ser de 1 a 200.', true); return; }
+
+  const current = getSprints();
+  const what = current.length === 1 ? 'va a reemplazar el sprint actual' : `van a reemplazar los ${current.length} sprints actuales`;
+  if (current.length && !confirm(`Se ${what} y sus tareas quedarán sin sprint. ¿Continuar?`)) return;
+  const removed = new Set(current.map(sp => sp.id));
+  (state.project.tasks || []).forEach(t => { if (removed.has(t.sprintId)) t.sprintId = null; });
+
+  // Consecutive, non-overlapping: each one starts the day after the previous ends
+  const stamp = Date.now();
+  state.project.sprints = Array.from({ length: count }, (_, i) => ({
+    id: `sp_${stamp}_${i + 1}`,
+    number: i + 1,
+    name: '',
+    startDate: fmtDate(addDays(start, i * days)),
+    endDate: fmtDate(addDays(start, i * days + days - 1)),
+    goal: '',
+  }));
+  cancelAutogen();
+  renderSprintList();
+  rebuildAndRender();
+  showToast(`${count} sprints generados.`);
+}
+
 // TASK HELPERS
 // ═══════════════════════════════════════════════════════════
 function getTaskById(id) {
@@ -1237,8 +2005,8 @@ function renumberTasks() {
 
 function ensureProject() {
   if (!state.project) {
-    state.project = { version:'1.0', project_name:'Nuevo proyecto', client_name:'', client_contact:'', client_email:'', tasks:[], team:[], phases:[], holidays:[], incidents:[] };
-    document.getElementById('project-name').textContent = 'Nuevo proyecto';
+    state.project = { version:'1.0', project_name:'Nuevo proyecto', client_name:'', client_contact:'', client_email:'', tasks:[], team:[], phases:[], sprints:[], holidays:[], incidents:[] };
+    setProjectNameDisplay('Nuevo proyecto');
     document.getElementById('empty-state').style.display = 'none';
   }
 }
@@ -1259,6 +2027,11 @@ function buildFlat() {
       children[t.parentId].push(t);
     } else roots.push(t);
   });
+  // Sprint filter: only that sprint's tasks, as a flat list (parents usually aren't in a sprint)
+  if (state.sprintFilter) {
+    return tasks.filter(t => t.sprintId === state.sprintFilter)
+      .map(task => ({ task, depth: 0, hasKids: false }));
+  }
   const flat = [];
   function walk(task, depth) {
     const hasKids = (children[task.id]||[]).length > 0;
@@ -1328,6 +2101,8 @@ function renderLeft() {
     const toggleHtml = hasKids
       ? `<div class="tr-toggle${isOpen?' open':''}" data-id="${task.id}">▶</div>`
       : `<div style="width:16px;flex-shrink:0"></div>`;
+    const sp = task.sprintId ? getSprintById(task.sprintId) : null;
+    const sprintCell = `<div class="tr-sprint" title="${sp ? escAttr(sprintDisplayName(sp)) : ''}">${sp ? esc(sprintShort(sp)) : '-'}</div>`;
     const dotColor = task.color || '#64748b';
     const msIcon = task.isMilestone ? `<span class="tr-milestone-icon">◆</span>` : '';
     html += `<div class="tr${sel}" data-id="${task.id}" style="position:relative">
@@ -1336,12 +2111,13 @@ function renderLeft() {
         <div class="tr-indent" style="width:${indent}px"></div>
         ${toggleHtml}${msIcon}
         ${!task.isMilestone?`<div class="tr-color-dot" style="background:${dotColor}"></div>`:''}
-        <div class="tr-name${nameClass}">${esc(task.name)}</div>
+        <div class="tr-name${nameClass}" title="${escAttr(task.name)}">${esc(task.name)}</div>
       </div>
       <div class="tr-date w74">${s}</div>
       <div class="tr-date w42">${dur}</div>
       <div class="tr-date w74">${e}</div>
       ${respHtml}
+      ${sprintCell}
       ${!task.isMilestone && task.progress > 0 ? `<div class="tr-prog-bar" style="width:${task.progress}%"></div>` : ''}
     </div>`;
   });
@@ -1358,12 +2134,16 @@ function esc(s) {
 function renderRuler() {
   const canvas = document.getElementById('ruler-canvas');
   const w = chartWidth();
-  canvas.width  = w; canvas.height = HEADER_H;
+  const H = rulerHeight();
+  canvas.width  = w; canvas.height = H;
   canvas.style.width = w + 'px';
+  // Keep the list header as tall as the ruler so task rows line up with their bars
+  document.getElementById('ruler-wrap').style.height = H + 'px';
+  document.getElementById('col-header').style.height = H + 'px';
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, w, HEADER_H);
+  ctx.clearRect(0, 0, w, H);
   ctx.fillStyle = '#0f1a2d';
-  ctx.fillRect(0, 0, w, HEADER_H);
+  ctx.fillRect(0, 0, w, H);
   if (state.view === 'day') {
     drawMonthLabels(ctx, w, 0, 26); drawDayLabels(ctx, w, 26, 26);
   } else if (state.view === 'week') {
@@ -1439,11 +2219,40 @@ function renderRuler() {
     });
   }
 
+  // ── Sprint band (below the phase band, only when sprints exist) ──
+  const sprints = getSprints();
+  if (sprints.length) {
+    const sy = HEADER_H;
+    ctx.fillStyle = 'rgba(132,204,22,.08)';
+    ctx.fillRect(0, sy, w, SPRINT_H);
+    ctx.fillStyle = 'rgba(255,255,255,.06)';
+    ctx.fillRect(0, sy, w, 1);
+    ctx.font = '500 9px Inter,system-ui';
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+    sprints.forEach(sp => {
+      const s = parseDate(sp.startDate), e = parseDate(sp.endDate);
+      if (!s || !e) return;
+      const x = dateToX(s), x2 = dateToX(e) + state.pxPerDay;
+      if (x2 <= 0 || x >= w) return;
+      ctx.fillStyle = 'rgba(132,204,22,.5)';
+      ctx.fillRect(Math.round(x), sy, 1, SPRINT_H);        // left edge
+      ctx.fillRect(Math.round(x2) - 1, sy, 1, SPRINT_H);   // right edge (end of last day)
+      // Custom name if it fits, else "S<n>", else nothing (never cut text)
+      const bx = Math.max(0, x), bw = Math.min(w, x2) - bx;
+      const label = [sp.name && sp.name.trim(), 'S' + sp.number]
+        .find(t => t && ctx.measureText(t).width + 8 <= bw);
+      if (label) {
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText(label, bx + bw / 2, sy + SPRINT_H / 2 + 0.5);
+      }
+    });
+  }
+
   // Today marker (drawn last so it sits on top)
   const tx = dateToX(new Date());
   if (tx >= 0 && tx <= w) {
     ctx.fillStyle = 'rgba(239,68,68,.85)';
-    ctx.fillRect(tx-1, 0, 2, HEADER_H);
+    ctx.fillRect(tx-1, 0, 2, H);
     ctx.fillStyle = '#ef4444';
     ctx.beginPath(); ctx.arc(tx, stripY - 4, 4, 0, Math.PI*2); ctx.fill();
   }
@@ -1586,6 +2395,19 @@ function renderGantt() {
       const x=dateToX(cur)+.5; ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,ch);ctx.stroke();
       cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);
     }
+  }
+
+  // Sprint start lines
+  const sprintsG = getSprints();
+  if (sprintsG.length) {
+    ctx.strokeStyle = 'rgba(132,204,22,.2)'; ctx.lineWidth = 1; ctx.setLineDash([3,4]);
+    sprintsG.forEach(sp => {
+      const sd = parseDate(sp.startDate); if (!sd) return;
+      const x = Math.round(dateToX(sd)) + .5;
+      if (x < 0 || x > cw) return;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ch); ctx.stroke();
+    });
+    ctx.setLineDash([]);
   }
 
   // Horizontal row lines
@@ -1925,6 +2747,7 @@ function setupResize() {
     if (!dragging) return;
     const newW = Math.max(260, Math.min(700, startW+e.clientX-startX));
     panel.style.width = newW+'px';
+    state.listBaseWidth = newW - (isSprintColumnVisible() ? SPRINT_COL_W : 0);
   });
   document.addEventListener('mouseup', () => {
     if (!dragging) return;
@@ -2014,6 +2837,12 @@ function openModal(taskId) {
     respInput.value = task.responsible || '';
   }
   document.getElementById('m-milestone').checked = !!task.isMilestone;
+  // Sprint (field only shown when the project has sprints)
+  const sprintsForModal = getSprintsSorted();
+  document.getElementById('m-sprint-field').hidden = sprintsForModal.length === 0;
+  document.getElementById('m-sprint').innerHTML = '<option value="">Sin sprint</option>' +
+    sprintsForModal.map(sp => `<option value="${escAttr(sp.id)}">${sprintOptionLabel(sp)}</option>`).join('');
+  document.getElementById('m-sprint').value = (task.sprintId && getSprintById(task.sprintId)) ? task.sprintId : '';
 
   selectModalColor(task.color || '#3b82f6');
   updateMilestoneFields(!!task.isMilestone);
@@ -2070,9 +2899,12 @@ function saveModal() {
     responsible = document.getElementById('m-resp').value.trim();
   }
 
+  const sprintId = getSprints().length ? (document.getElementById('m-sprint').value || null) : null;
+
   if (modalEditId) {
     const task = getTaskById(modalEditId);
     if (!task) { closeModal(); return; }
+    if (getSprints().length) task.sprintId = sprintId;
     task.name = name; task.startDate = startDate; task.endDate = endDate;
     task.duration = duration; task.progress = progress;
     task.responsible = responsible; task.assigneeIds = assigneeIds; task.color = modalColor; task.isMilestone = isMilestone;
@@ -2085,7 +2917,7 @@ function saveModal() {
     const newTask = {
       id: 'task_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
       taskNum: 0, name, startDate, endDate, duration, progress,
-      responsible, assigneeIds, color: modalColor, parentId, dependencies: [], isMilestone
+      responsible, assigneeIds, color: modalColor, parentId, dependencies: [], isMilestone, sprintId
     };
     state.project.tasks.push(newTask);
     state.selectedId = newTask.id;
@@ -2179,6 +3011,13 @@ function newTask() {
 // ═══════════════════════════════════════════════════════════
 // PROJECT NAME EDIT
 // ═══════════════════════════════════════════════════════════
+// Visible text + hover tooltip with the full name (the toolbar can truncate it)
+function setProjectNameDisplay(name) {
+  const el = document.getElementById('project-name');
+  el.textContent = name;
+  el.title = name;
+}
+
 function setupProjectNameEdit() {
   const el = document.getElementById('project-name');
   el.addEventListener('click', () => {
@@ -2192,13 +3031,18 @@ function setupProjectNameEdit() {
   });
   el.addEventListener('blur', () => {
     el.contentEditable = 'false';
-    if (state.project) state.project.project_name = el.textContent.trim() || 'Sin nombre';
+    if (state.project) {
+      state.project.project_name = el.textContent.trim() || 'Sin nombre';
+      setProjectNameDisplay(state.project.project_name);
+    }
   });
   el.addEventListener('keydown', e => {
     if (e.key==='Enter') { e.preventDefault(); el.blur(); }
     if (e.key==='Escape') {
+      // Restore first: leaving edit mode fires blur, which saves whatever text is shown
+      if (state.project) setProjectNameDisplay(state.project.project_name);
       el.contentEditable='false';
-      if (state.project) el.textContent = state.project.project_name;
+      el.blur();
     }
   });
 }
@@ -2281,8 +3125,8 @@ function loadProject(data, filename) {
   }
   // ────────────────────────────────────────────────────────
   state.project = data;
-  document.getElementById('project-name').textContent =
-    data.project_name || data.projectName || filename || 'Proyecto sin nombre';
+  state.sprintFilter = '';
+  setProjectNameDisplay(data.project_name || data.projectName || filename || 'Proyecto sin nombre');
   state.expanded.clear();
   // 3. `expanded` field on tasks (Python) → state.expanded Set (web)
   //    If the file has Python-style expanded flags use them; otherwise expand all roots
@@ -2320,6 +3164,7 @@ function scrollToToday() {
 // MAIN RENDER CYCLE
 // ═══════════════════════════════════════════════════════════
 function rebuildAndRender(scrollTodayOnLoad) {
+  refreshSprintUI();
   calcRange();
   state.flat = buildFlat();
   renderLeft();
