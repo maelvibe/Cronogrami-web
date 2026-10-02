@@ -2929,7 +2929,6 @@ function renderGantt(tile) {
         ctx.fillStyle=hexWithAlpha(color,.15); ctx.fill();
         ctx.strokeStyle=color; ctx.lineWidth=2; ctx.stroke();
       }
-      if (isOverdue(task)) { ctx.strokeStyle='#ef4444'; ctx.lineWidth=2; ctx.stroke(); }
       if (isSelected) { ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke(); }
     } else {
       const barH=isPhase?14:16;
@@ -2945,7 +2944,6 @@ function renderGantt(tile) {
         ctx.fillStyle=hexWithAlpha(color,.5);
         roundRect(ctx,x,barY+barH-4,pw,4,{tl:0,tr:0,bl:r,br:r}); ctx.fill();
       }
-      if (isOverdue(task)) { ctx.strokeStyle='#ef4444';ctx.lineWidth=1.5; roundRect(ctx,x+.75,barY+.75,barW-1.5,barH-1.5,r); ctx.stroke(); }
       if (isSelected) { ctx.strokeStyle='#fff';ctx.lineWidth=1.5; roundRect(ctx,x,barY,barW,barH,r); ctx.stroke(); }
       if (barW>30&&state.pxPerDay>=4) {
         ctx.fillStyle=isPhase?color:'#e2e8f0';
