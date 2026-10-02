@@ -103,6 +103,31 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 }
 .zoom-btn:hover{background:var(--surface2);color:var(--fg)}
 
+/* ── PROJECT HEAD: % de avance + resumen (opciones del menú Vista) ── */
+#project-head{
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;padding:10px 14px;
+  background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;
+}
+#project-head[hidden]{display:none}
+.ph-title{display:flex;flex-direction:column;gap:6px;min-width:240px}
+.ph-title-row{display:flex;align-items:baseline;gap:8px}
+.ph-pct{font-size:28px;font-weight:700;line-height:1;color:var(--fg);font-variant-numeric:tabular-nums}
+.ph-lbl{font-size:13px;color:var(--fg2)}
+.ph-bar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;width:100%}
+.ph-bar-fill{height:100%;background:var(--accent);border-radius:3px}
+.ph-tiles{display:flex;flex-wrap:wrap;gap:8px}
+.ph-tile{
+  background:var(--toolbar);border:1px solid var(--border);border-radius:7px;
+  padding:6px 10px;min-width:96px;
+}
+.ph-tile .k{font-size:10px;font-weight:500;color:var(--fg3);text-transform:uppercase;letter-spacing:.45px}
+.ph-tile .v{font-size:16px;font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums;margin-top:2px}
+.ph-tile .v small{font-size:11px;font-weight:400;color:var(--fg2)}
+.ph-tile.danger .v{color:var(--danger)}
+.ph-tile.hitos{min-width:200px;max-width:340px}
+.ph-hito{font-size:12px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.ph-hito b{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums;margin-right:4px}
+
 /* ── MAIN BODY ───────────────────────────────────────────── */
 #app-body{display:flex;flex:1;overflow:hidden;min-height:0}
 
@@ -656,6 +681,8 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
   <button class="zoom-btn" id="gantt-toggle-btn" onclick="toggleGanttCollapsed()" title="Ocultar Gantt" aria-label="Ocultar Gantt">⊟</button>
 </div>
 
+<div id="project-head" hidden></div>
+
 <!-- ── APP BODY ──────────────────────────────────────────── -->
 <div id="app-body">
   <div id="left-panel" style="width:420px">
@@ -1082,6 +1109,8 @@ const MAX_UNDO = 50;
 // state.viewOpts.<key> where it is drawn. Saved per browser (not in the .cronogrami file).
 const VIEW_OPTIONS = [
   { key: 'overdueHighlight', label: 'Marcar tareas vencidas en rojo (lista y Gantt)', default: false },
+  { key: 'progressTitle',    label: 'Mostrar % de avance del proyecto como título', default: false },
+  { key: 'projectSummary',   label: 'Mostrar resumen del proyecto', default: false },
 ];
 const VIEW_OPTS_KEY = 'cronogrami.viewOpts';
 state.viewOpts = loadViewOpts();
@@ -1097,7 +1126,7 @@ function loadViewOpts() {
 function setViewOpt(key, value) {
   state.viewOpts[key] = value;
   try { localStorage.setItem(VIEW_OPTS_KEY, JSON.stringify(state.viewOpts)); } catch (e) {}
-  renderLeft(); renderGantt();
+  renderProjectHead(); renderLeft(); renderRuler(); renderGantt();
 }
 function toggleViewMenu(force) {
   const menu = document.getElementById('view-menu');
@@ -2331,6 +2360,68 @@ function computeOverdue() {
 }
 function isOverdue(task) { return !!(state.overdue && state.overdue.has(task.id)); }
 
+// Project summary figures. % de avance: progress of the leaf tasks (milestones aside)
+// weighted by their duration, since parent progress is not rolled up.
+function computeProjectSummary() {
+  const tasks = (state.project && state.project.tasks) || [];
+  const today = fmtDate(new Date());
+  const parents = new Set(tasks.filter(t => t.parentId).map(t => t.parentId));
+  const leaves = tasks.filter(t => !parents.has(t.id));
+  const work = leaves.filter(t => !t.isMilestone);
+  let wSum = 0, pSum = 0;
+  work.forEach(t => {
+    const w = Math.max(1, Number(t.duration ?? t.durationDays) || 1);
+    wSum += w; pSum += w * Math.max(0, Math.min(100, Number(t.progress) || 0));
+  });
+  const ends = tasks.map(t => getBarDates(t).endDate).filter(Boolean).sort();
+  return {
+    pct: wSum ? Math.round(pSum / wSum) : 0,
+    total: work.length,
+    done: work.filter(t => (Number(t.progress) || 0) >= 100).length,
+    inProgress: work.filter(t => { const p = Number(t.progress) || 0; return p > 0 && p < 100; }).length,
+    overdue: leaves.filter(isOverdue).length,
+    nextMilestones: leaves
+      .filter(t => t.isMilestone && !t.milestoneCompleted && t.startDate && t.startDate >= today)
+      .sort((a, b) => a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0)
+      .slice(0, 3),
+    endDate: ends.length ? ends[ends.length - 1] : null,
+    today,
+  };
+}
+
+// Band above the task list; each part only when its "Vista" option is on.
+function renderProjectHead() {
+  const el = document.getElementById('project-head');
+  const showTitle = state.viewOpts.progressTitle, showSummary = state.viewOpts.projectSummary;
+  if (!state.project || (!showTitle && !showSummary)) { el.hidden = true; el.innerHTML = ''; return; }
+  const s = computeProjectSummary();
+  const bar = `<div class="ph-bar"><div class="ph-bar-fill" style="width:${s.pct}%"></div></div>`;
+  let html = '';
+  if (showTitle) {
+    html += `<div class="ph-title"><div class="ph-title-row"><span class="ph-pct">${s.pct}%</span>
+      <span class="ph-lbl">de avance del proyecto</span></div>${bar}</div>`;
+  }
+  if (showSummary) {
+    const tile = (k, v, cls) => `<div class="ph-tile${cls ? ' ' + cls : ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+    const short = iso => fmtShort(parseDate(iso));
+    let tiles = '';
+    if (!showTitle) tiles += tile('Avance', `${s.pct}%`);
+    tiles += tile('Completadas', `${s.done} <small>de ${s.total}</small>`);
+    tiles += tile('En curso', s.inProgress);
+    tiles += tile('Vencidas', s.overdue, s.overdue ? 'danger' : '');
+    if (s.endDate) {
+      const left = diffDays(parseDate(s.today), parseDate(s.endDate));
+      tiles += tile('Fin previsto', `${short(s.endDate)} <small>${left > 0 ? 'faltan ' + left + ' días' : left === 0 ? 'hoy' : 'hace ' + (-left) + ' días'}</small>`);
+    }
+    tiles += `<div class="ph-tile hitos"><div class="k">Próximos hitos</div>${s.nextMilestones.length
+      ? s.nextMilestones.map(m => `<div class="ph-hito" title="${escAttr(m.name)}"><b>${short(m.startDate)}</b>${esc(m.name)}</div>`).join('')
+      : '<div class="ph-hito">Sin hitos pendientes</div>'}</div>`;
+    html += `<div class="ph-tiles">${tiles}</div>`;
+  }
+  el.innerHTML = html;
+  el.hidden = false;
+}
+
 function getBarDates(task) {
   const r = state.rollup && state.rollup[task.id];
   return r || { startDate: task.startDate, endDate: task.endDate };
@@ -3219,6 +3310,7 @@ function setupCanvasInteraction() {
     }
     state.rollup = computeRollupDates();
     state.overdue = computeOverdue();
+    renderProjectHead();
     calcRange(); renderRuler(); renderGantt();
   });
 
@@ -3893,6 +3985,7 @@ function rebuildAndRender(scrollTodayOnLoad) {
   state.flat = buildFlat();
   state.rollup = computeRollupDates();
   state.overdue = computeOverdue();
+  renderProjectHead();
   renderLeft();
   renderRuler();
   renderGantt();
