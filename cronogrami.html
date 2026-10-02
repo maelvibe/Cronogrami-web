@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cronogrami Web</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap">
@@ -444,6 +449,8 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 #client-badge:hover{background:rgba(132,204,22,.25)}
 
 </style>
+</head>
+<body>
 
 <!-- ── TOOLBAR ───────────────────────────────────────────── -->
 <div id="toolbar">
@@ -464,7 +471,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 4a1 1 0 011-1h3.586a1 1 0 01.707.293l.707.707A1 1 0 008.707 4H13a1 1 0 011 1v7a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
     Abrir
   </label>
-  <button class="tb-btn" onclick="saveFile()">
+  <button class="tb-btn" onclick="saveProject()">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13 11v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     Guardar
   </button>
@@ -472,7 +479,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="5" r="2.3" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 13c0-2.2 2-4 4.5-4s4.5 1.8 4.5 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="11.5" cy="5" r="1.8" stroke="currentColor" stroke-width="1.3"/><path d="M13.5 12.5c0-1.5-1.1-2.75-2.5-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
     Equipo
   </button>
-  <button class="tb-btn" onclick="openPhaseModal()">
+  <button class="tb-btn" onclick="openPhasesModal()">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M6 4V3M10 4V3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5 8h2M9 8h2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
     Fases
   </button>
@@ -657,7 +664,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
   <div id="phase-modal">
     <div class="pm-header">
       <span class="pm-title">Fases del proyecto</span>
-      <button class="tm-icon-btn" onclick="closePhaseModal()" title="Cerrar">
+      <button class="tm-icon-btn" onclick="closePhasesModal()" title="Cerrar">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
     </div>
@@ -690,7 +697,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
     <div class="pm-footer">
       <button class="btn-ghost" id="pm-add-btn" onclick="showAddPhaseForm()">+ Agregar fase</button>
       <div style="flex:1"></div>
-      <button class="btn-primary" onclick="closePhaseModal()">Listo</button>
+      <button class="btn-primary" onclick="closePhasesModal()">Listo</button>
     </div>
   </div>
 </div>
@@ -1095,7 +1102,7 @@ function getHolidayDatesInRange() {
   return out;
 }
 
-function openPhaseModal() {
+function openPhasesModal() {
   ensureProject();
   phaseColor = PHASE_COLORS[getPhases().length % PHASE_COLORS.length];
   renderPhaseList();
@@ -1103,7 +1110,7 @@ function openPhaseModal() {
   document.getElementById('phase-modal-overlay').hidden = false;
 }
 
-function closePhaseModal() {
+function closePhasesModal() {
   document.getElementById('phase-modal-overlay').hidden = true;
   rebuildAndRender();
 }
@@ -2245,7 +2252,7 @@ function handleFileOpen(e) {
   e.target.value = '';
 }
 
-async function saveFile() {
+async function saveProject() {
   if (!state.project) { alert('No hay proyecto cargado.'); return; }
   const json = JSON.stringify(state.project, null, 2);
   const filename = (state.project.project_name || 'proyecto')
@@ -2341,3 +2348,5 @@ setupKeyboard();
 initColorSwatches();
 loadProject(DEMO, 'demo.cronogrami');
 </script>
+</body>
+</html>
