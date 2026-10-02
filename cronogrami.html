@@ -1081,7 +1081,7 @@ const MAX_UNDO = 50;
 // Display options in the "Vista" menu. To add one: a new entry here, then read
 // state.viewOpts.<key> where it is drawn. Saved per browser (not in the .cronogrami file).
 const VIEW_OPTIONS = [
-  { key: 'overdueOutline', label: 'Contorno rojo en tareas vencidas (Gantt)', default: false },
+  { key: 'overdueHighlight', label: 'Marcar tareas vencidas en rojo (lista y Gantt)', default: false },
 ];
 const VIEW_OPTS_KEY = 'cronogrami.viewOpts';
 state.viewOpts = loadViewOpts();
@@ -2557,7 +2557,7 @@ function renderLeft() {
   if (!rows.length) { scroll.innerHTML = ''; return; }
   let html = '';
   rows.forEach(({task, depth, hasKids, forceOpen, searchMatch, ancestorOnly}) => {
-    const late = isOverdue(task);
+    const late = state.viewOpts.overdueHighlight && isOverdue(task);
     const sel = (task.id === state.selectedId ? ' selected' : '') + (ancestorOnly ? ' tr-ancestor-only' : '') + (late ? ' overdue' : '');
     const nameClass = task.parentId == null ? ' phase' : (task.isMilestone ? ' milestone' : '');
     const indent = depth * 24;
@@ -2967,7 +2967,7 @@ function renderGantt(tile) {
   });
 
   // Task bars
-  const outlineLate = state.viewOpts.overdueOutline;
+  const outlineLate = state.viewOpts.overdueHighlight;
   state.flat.forEach(({task,depth},i) => {
     const bd=getBarDates(task);
     const s=parseDate(bd.startDate), e=parseDate(bd.endDate);
