@@ -1183,11 +1183,13 @@ async function withLoading(btnId, fn) {
   finally { btn.disabled = false; btn.innerHTML = orig; }
 }
 
-function exportBaseName() {
-  // ASCII-only: browsers drop the download name ("download") when it has accents or dashes like "–"
-  const name = (state.project?.project_name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+// ASCII-only: browsers drop the download name ("download") when it has accents or dashes like "–"
+function asciiFileBase(name) {
+  return (name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[\u2013\u2014]/g, '-').replace(/[^A-Za-z0-9 ._-]+/g, '_').trim() || 'proyecto';
-  return 'cronograma-' + name;
+}
+function exportBaseName() {
+  return 'cronograma-' + asciiFileBase(state.project?.project_name);
 }
 // True when the page runs inside a Claude artifact
 function isClaudeArtifact() {
@@ -3097,15 +3099,18 @@ function handleFileOpen(e) {
 
 async function saveProject() {
   if (!state.project) { alert('No hay proyecto cargado.'); return; }
-  const json = JSON.stringify(state.project, null, 2);
-  const filename = (state.project.project_name || 'proyecto')
-    .replace(/[^a-z0-9áéíóúüñ _-]/gi,'_') + '.cronogrami';
+  // Include the current view and zoom so loadProject() can restore them
+  const projectToSave = {
+    ...state.project,
+    viewMode: state.view,
+    pxPerDay: state.pxPerDay,
+  };
+  const json = JSON.stringify(projectToSave, null, 2);
+  const filename = asciiFileBase(state.project.project_name) + '.cronogrami';
+  // Claude downloads API inside an artifact; plain <a download> otherwise (file://, local server)
   try {
-    const downloads = await claude.use('downloads');
-    if (!downloads) { alert('Descarga no disponible en este entorno.'); return; }
-    await downloads.save({ filename, data: json });
+    await triggerDownload(filename, new Blob([json], { type: 'application/json' }));
   } catch (err) {
-    if (err?.code==='declined') return;
     console.error('Save error', err);
     alert('No se pudo guardar: ' + (err?.message || err));
   }
@@ -3125,6 +3130,16 @@ function loadProject(data, filename) {
   }
   // ────────────────────────────────────────────────────────
   state.project = data;
+  // 4. Restaurar vista y zoom si el archivo los tiene guardados
+  if (data.viewMode && VIEW_PX[data.viewMode]) {
+    state.view = data.viewMode;
+    state.pxPerDay = VIEW_PX[data.viewMode];
+    document.querySelectorAll('.view-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.v === state.view));
+  }
+  if (typeof data.pxPerDay === 'number' && data.pxPerDay > 0) {
+    state.pxPerDay = data.pxPerDay;
+  }
   state.sprintFilter = '';
   setProjectNameDisplay(data.project_name || data.projectName || filename || 'Proyecto sin nombre');
   state.expanded.clear();
