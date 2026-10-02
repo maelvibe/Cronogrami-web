@@ -278,6 +278,27 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 #tooltip .tt-prog{height:5px;background:var(--surface2);border-radius:3px;margin-top:6px;overflow:hidden}
 #tooltip .tt-prog-fill{height:100%;border-radius:3px;background:var(--accent)}
 
+/* ── TASK CONTEXT MENU (right click on a task, list or Gantt) ── */
+#ctx-menu{
+  position:fixed;z-index:300;min-width:210px;max-width:300px;
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:5px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-size:12px;
+}
+#ctx-menu .cm-title{color:var(--fg3);font-size:11px;padding:4px 8px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ctx-menu button{
+  display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:0;border-radius:5px;
+  background:none;color:var(--fg2);font:inherit;text-align:left;cursor:pointer;
+}
+#ctx-menu button:hover:not(:disabled),#ctx-menu button:focus-visible{background:var(--surface2);color:var(--fg);outline:none}
+#ctx-menu button:disabled{opacity:.45;cursor:default}
+#ctx-menu button .cm-ic{width:16px;text-align:center;flex-shrink:0}
+#ctx-menu button.danger{color:var(--danger)}
+#ctx-menu button.danger:hover{background:rgba(239,68,68,.12);color:var(--danger)}
+#ctx-menu .cm-sep{height:1px;background:var(--border);margin:4px 2px}
+#ctx-menu .cm-msg{color:var(--fg);padding:6px 8px;line-height:1.4}
+#ctx-menu .cm-row{display:flex;gap:6px;padding:2px 4px 4px}
+#ctx-menu .cm-row button{justify-content:center;border:1px solid var(--border)}
+
 /* ── DRAG RESIZE ─────────────────────────────────────────── */
 #resize-handle{
   width:6px;background:transparent;cursor:col-resize;flex-shrink:0;
@@ -825,6 +846,7 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 </div>
 
 <div id="tooltip"></div>
+<div id="ctx-menu" role="menu" hidden></div>
 <input type="file" id="file-input" accept=".cronogrami,.json" onchange="handleFileOpen(event)" style="position:absolute;width:0;height:0;opacity:0;overflow:hidden">
 
 <!-- ── MODAL ─────────────────────────────────────────────── -->
@@ -3750,6 +3772,201 @@ function setupRowEvents() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// TASK CONTEXT MENU (right click on a row of the list or the Gantt)
+// ═══════════════════════════════════════════════════════════
+let ctxTaskId = null;
+
+// Leaf work tasks reach 100%; milestones are marked completed
+function isTaskComplete(t) { return t.isMilestone ? !!t.milestoneCompleted : (Number(t.progress) || 0) >= 100; }
+function isTaskTreeComplete(taskId) {
+  return [taskId, ...getAllDescendants(taskId)].every(id => isTaskComplete(getTaskById(id)));
+}
+
+function openTaskContextMenu(taskId, clientX, clientY) {
+  const task = getTaskById(taskId);
+  if (!task || anyDialogOpen()) return;
+  toggleViewMenu(false);
+  toggleFilterMenu(false);
+  document.getElementById('tooltip').style.display = 'none';
+  ctxTaskId = taskId;
+  if (state.selectedId !== taskId) { state.selectedId = taskId; renderLeft(); renderGantt(); }
+
+  const kids = getAllDescendants(taskId).length;
+  const done = isTaskTreeComplete(taskId);
+  const otherGoLive = getGoLiveTask(taskId);
+  const goLiveLabel = task.isGoLive ? 'Quitar Go Live' : 'Marcar como Go Live';
+  const goLiveTitle = otherGoLive
+    ? `Ya está marcada como Go Live la tarea ${otherGoLive.taskNum ?? ''} «${otherGoLive.name}»` : '';
+  const item = (act, ic, label, extra = '') =>
+    `<button type="button" role="menuitem" data-act="${act}"${extra}><span class="cm-ic">${ic}</span>${label}</button>`;
+
+  const menu = document.getElementById('ctx-menu');
+  menu.innerHTML = `
+    <div class="cm-title" title="${escAttr(task.name)}">${task.taskNum ?? ''}. ${esc(task.name)}</div>
+    ${item('edit', '✎', 'Editar')}
+    ${item('duplicate', '⧉', kids ? 'Duplicar (con subtareas)' : 'Duplicar')}
+    ${item('subtask', '+', 'Agregar subtarea')}
+    <div class="cm-sep"></div>
+    ${item('complete', '✓', done ? 'Completada' : (kids ? 'Marcar como completada (con subtareas)' : 'Marcar como completada'), done ? ' disabled' : '')}
+    ${item('golive', '🏁', goLiveLabel, otherGoLive ? ` disabled title="${escAttr(goLiveTitle)}"` : '')}
+    <div class="cm-sep"></div>
+    ${item('delete', '🗑', 'Eliminar', ' class="danger"')}`;
+  menu.hidden = false;
+  placeContextMenu(clientX, clientY);
+  menu.querySelector('button:not(:disabled)').focus();
+}
+
+function placeContextMenu(x, y) {
+  const menu = document.getElementById('ctx-menu');
+  menu.style.left = '0px'; menu.style.top = '0px';
+  const w = menu.offsetWidth, h = menu.offsetHeight;
+  menu.style.left = Math.max(4, Math.min(x, window.innerWidth - w - 4)) + 'px';
+  menu.style.top  = Math.max(4, Math.min(y, window.innerHeight - h - 4)) + 'px';
+}
+
+function closeTaskContextMenu() {
+  const menu = document.getElementById('ctx-menu');
+  if (menu.hidden) return;
+  menu.hidden = true;
+  menu.innerHTML = '';
+  ctxTaskId = null;
+}
+
+function showContextDeleteConfirm() {
+  const task = getTaskById(ctxTaskId);
+  if (!task) return closeTaskContextMenu();
+  const n = getAllDescendants(ctxTaskId).length;
+  const menu = document.getElementById('ctx-menu');
+  const rect = menu.getBoundingClientRect();
+  menu.innerHTML = `
+    <div class="cm-msg">${n > 0 ? `¿Eliminar «${esc(task.name)}» y sus ${n} subtarea(s)?` : `¿Eliminar «${esc(task.name)}»?`}</div>
+    <div class="cm-row">
+      <button type="button" data-act="cancel">No</button>
+      <button type="button" class="danger" data-act="confirm-delete">Sí, eliminar</button>
+    </div>`;
+  placeContextMenu(rect.left, rect.top);
+  menu.querySelector('[data-act="cancel"]').focus();
+}
+
+function runContextAction(act) {
+  const id = ctxTaskId;
+  const task = getTaskById(id);
+  if (!task) return closeTaskContextMenu();
+  if (act === 'delete') return showContextDeleteConfirm();
+  closeTaskContextMenu();
+  switch (act) {
+    case 'edit': openModal(id); break;
+    case 'subtask': openModal(null, { parentId: id }); break;
+    case 'duplicate': duplicateTask(id); break;
+    case 'complete': completeTaskTree(id); break;
+    case 'golive': toggleTaskGoLive(id); break;
+    case 'confirm-delete': deleteTaskTree(id); rebuildAndRender(false); break;
+  }
+}
+
+// Copies the task and its subtasks right below the original. Dependencies between
+// copied tasks point to the copies; the rest are kept. Go Live is not copied (one per project).
+function duplicateTask(taskId) {
+  const tasks = state.project.tasks;
+  const ids = [taskId, ...getAllDescendants(taskId)];
+  const idMap = {};
+  const stamp = Date.now();
+  ids.forEach((id, i) => idMap[id] = `task_${stamp}_${i}_${Math.random().toString(36).slice(2,5)}`);
+  pushUndo();
+  const copies = ids.map(id => {
+    const c = JSON.parse(JSON.stringify(getTaskById(id)));
+    c.id = idMap[id];
+    if (id === taskId) c.name = (c.name || '') + ' (copia)';
+    else c.parentId = idMap[c.parentId] || c.parentId;
+    c.dependencies = (c.dependencies || []).map(d => idMap[d] || d);
+    delete c.isGoLive;
+    return c;
+  });
+  // Insert after the last task of the original's subtree, keeping the list order
+  const idSet = new Set(ids);
+  let at = -1;
+  tasks.forEach((t, i) => { if (idSet.has(t.id)) at = i; });
+  tasks.splice(at + 1, 0, ...copies);
+  ids.forEach(id => { if (state.expanded.has(id)) state.expanded.add(idMap[id]); });
+  const parentId = getTaskById(taskId).parentId;
+  if (parentId) state.expanded.add(parentId);
+  state.selectedId = idMap[taskId];
+  renumberTasks();
+  rebuildAndRender(false);
+  showToast(ids.length > 1 ? `Tarea duplicada con ${ids.length - 1} subtarea(s)` : 'Tarea duplicada');
+}
+
+// Marks the task and all its subtasks as done: 100% for work, completed for milestones
+function completeTaskTree(taskId) {
+  pushUndo();
+  [taskId, ...getAllDescendants(taskId)].forEach(id => {
+    const t = getTaskById(id);
+    if (t.isMilestone) t.milestoneCompleted = true;
+    else t.progress = 100;
+  });
+  rebuildAndRender(false);
+}
+
+function toggleTaskGoLive(taskId) {
+  const task = getTaskById(taskId);
+  if (!task.isGoLive && getGoLiveTask(taskId)) return; // only one per project
+  pushUndo();
+  if (task.isGoLive) delete task.isGoLive; else task.isGoLive = true;
+  rebuildAndRender(false);
+}
+
+function setupContextMenu() {
+  const menu = document.getElementById('ctx-menu');
+  document.getElementById('task-scroll').addEventListener('contextmenu', e => {
+    const row = e.target.closest('.tr');
+    if (!row) return;
+    e.preventDefault();
+    openTaskContextMenu(row.dataset.id, e.clientX, e.clientY);
+  });
+  document.getElementById('gantt-canvas').addEventListener('contextmenu', e => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const item = state.flat[Math.floor((e.clientY - rect.top) / ROW_H)];
+    if (!item) return;
+    e.preventDefault();
+    openTaskContextMenu(item.task.id, e.clientX, e.clientY);
+  });
+  menu.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn || btn.disabled) return;
+    if (btn.dataset.act === 'cancel') closeTaskContextMenu();
+    else runContextAction(btn.dataset.act);
+  });
+  menu.addEventListener('contextmenu', e => e.preventDefault());
+  menu.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeTaskContextMenu(); e.preventDefault(); e.stopPropagation(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const btns = [...menu.querySelectorAll('button:not(:disabled)')];
+      const i = btns.indexOf(document.activeElement);
+      const next = btns[(i + (e.key === 'ArrowDown' ? 1 : btns.length - 1)) % btns.length];
+      if (next) next.focus();
+      e.preventDefault();
+    }
+  });
+  document.addEventListener('mousedown', e => { if (!e.target.closest('#ctx-menu')) closeTaskContextMenu(); }, true);
+  // Wheel, not 'scroll': selecting a row scrolls the Gantt by code, which would close it right away
+  document.addEventListener('wheel', e => { if (!e.target.closest('#ctx-menu')) closeTaskContextMenu(); }, { passive: true });
+  // Menu key or Shift+F10: open it for the selected task, next to its row in the list
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !menu.hidden) { closeTaskContextMenu(); e.preventDefault(); e.stopImmediatePropagation(); return; }
+    if (!(e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) || !state.selectedId) return;
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return;
+    const row = document.querySelector(`#task-scroll .tr[data-id="${CSS.escape(state.selectedId)}"]`);
+    if (!row) return;
+    e.preventDefault();
+    const r = row.getBoundingClientRect();
+    openTaskContextMenu(state.selectedId, r.left + 40, r.bottom);
+  }, true);
+  window.addEventListener('resize', closeTaskContextMenu);
+  window.addEventListener('blur', closeTaskContextMenu);
+}
+
+// ═══════════════════════════════════════════════════════════
 // RESIZE HANDLE
 // ═══════════════════════════════════════════════════════════
 function setupResize() {
@@ -3784,6 +4001,7 @@ const COLORS = [
   '#84cc16','#f59e0b','#6366f1','#06b6d4',
 ];
 let modalEditId = null;
+let modalNewParentId = null; // parent of the task being created (new-task mode only)
 let modalColor = '#3b82f6';
 
 function initColorSwatches() {
@@ -3812,7 +4030,9 @@ function updateMilestoneFields(isMilestone) {
   document.getElementById('m-progress-field').style.display = isMilestone ? 'none' : '';
 }
 
-function openModal(taskId) {
+// opts.parentId (new task only): create it as a subtask of that task instead of
+// deriving the parent from the selection
+function openModal(taskId, opts) {
   modalEditId = taskId || null;
   hideDeleteConfirm();
 
@@ -3820,10 +4040,13 @@ function openModal(taskId) {
   if (!modalEditId) {
     // New task — determine parent context
     let parentId = null;
-    if (state.selectedId) {
+    if (opts && opts.parentId && getTaskById(opts.parentId)) {
+      parentId = opts.parentId;
+    } else if (state.selectedId) {
       const sel = getTaskById(state.selectedId);
       if (sel) parentId = sel.parentId ? sel.parentId : sel.id;
     }
+    modalNewParentId = parentId;
     const today = fmtDate(new Date());
     const nextWeek = fmtDate(addDays(new Date(), 7));
     const parentTask = parentId ? getTaskById(parentId) : null;
@@ -3904,6 +4127,7 @@ function openModal(taskId) {
 function closeModal() {
   document.getElementById('modal-overlay').hidden = true;
   modalEditId = null;
+  modalNewParentId = null;
 }
 
 function saveModal() {
@@ -3960,11 +4184,7 @@ function saveModal() {
       pullAsk = { taskId: task.id, prevEndDate };
     }
   } else {
-    let parentId = null;
-    if (state.selectedId) {
-      const sel = getTaskById(state.selectedId);
-      if (sel) parentId = sel.parentId ? sel.parentId : sel.id;
-    }
+    const parentId = modalNewParentId && getTaskById(modalNewParentId) ? modalNewParentId : null;
     pushUndo();
     const newTask = {
       id: 'task_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
@@ -4002,8 +4222,15 @@ function hideDeleteConfirm() {
 
 function confirmDeleteModal() {
   if (!modalEditId) return;
+  deleteTaskTree(modalEditId);
+  closeModal();
+  rebuildAndRender();
+}
+
+// Deletes a task and its subtasks (one undo step); the caller re-renders
+function deleteTaskTree(taskId) {
   pushUndo();
-  const toDelete = [modalEditId, ...getAllDescendants(modalEditId)];
+  const toDelete = [taskId, ...getAllDescendants(taskId)];
   toDelete.forEach(id => {
     state.project.tasks = state.project.tasks.filter(t => t.id !== id);
     state.project.tasks.forEach(t => {
@@ -4013,8 +4240,6 @@ function confirmDeleteModal() {
   });
   if (toDelete.includes(state.selectedId)) state.selectedId = null;
   renumberTasks();
-  closeModal();
-  rebuildAndRender();
 }
 
 function setupModal() {
@@ -4486,6 +4711,7 @@ window.addEventListener('resize', () => {
 setupScrollSync();
 setupCanvasInteraction();
 setupRowEvents();
+setupContextMenu();
 setupResize();
 setupModal();
 setupProjectNameEdit();
