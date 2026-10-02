@@ -170,6 +170,24 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 #task-search-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);cursor:pointer;
   color:var(--fg3);font-size:13px;line-height:1;user-select:none}
 #task-search-clear:hover{color:var(--fg)}
+#filter-wrap{position:relative;flex-shrink:0}
+#filter-btn{display:flex;align-items:center;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:6px;
+  color:var(--fg2);font-family:inherit;font-size:11px;padding:3px 7px;cursor:pointer;white-space:nowrap}
+#filter-btn:hover{color:var(--fg)}
+#filter-btn.active{border-color:var(--accent);color:var(--accent)}
+#filter-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:50;width:220px;
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:8px}
+#filter-menu[hidden]{display:none}
+#filter-menu label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--fg3);text-transform:uppercase;letter-spacing:.45px}
+#filter-menu select{background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);
+  font-family:inherit;font-size:12px;padding:4px 6px;outline:none;color-scheme:dark;cursor:pointer;text-transform:none;letter-spacing:0}
+#filter-menu select:focus{border-color:var(--accent)}
+#filter-menu select.active{border-color:var(--accent)}
+#flt-clear{align-self:flex-end;background:none;border:none;color:var(--fg3);font-family:inherit;font-size:11px;cursor:pointer;padding:2px 0}
+#flt-clear:hover:not(:disabled){color:var(--accent)}
+#flt-clear:disabled{opacity:.4;cursor:default}
+.list-no-match{padding:16px 12px;font-size:12px;color:var(--fg3);text-align:center}
 .search-hl{background:#fef08a;color:#1e293b;border-radius:2px}
 .tr-ancestor-only{opacity:0.5}
 #task-scroll{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
@@ -708,6 +726,18 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
           <input type="text" id="task-search" placeholder="Buscar tarea..." autocomplete="off" spellcheck="false">
           <span id="task-search-clear" title="Limpiar búsqueda" hidden>×</span>
         </div>
+        <div id="filter-wrap">
+          <button type="button" id="filter-btn" onclick="toggleFilterMenu()" title="Filtrar por fase, responsable o estado" aria-haspopup="true" aria-expanded="false">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 3h12l-4.5 5.5V13l-3 1.5V8.5L2 3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+            <span id="filter-btn-label">Filtros</span>
+          </button>
+          <div id="filter-menu" hidden>
+            <label>Fase<select id="flt-phase" onchange="setTaskFilter('phase', this.value)"></select></label>
+            <label id="flt-assignee-row">Responsable<select id="flt-assignee" onchange="setTaskFilter('assignee', this.value)"></select></label>
+            <label>Estado<select id="flt-status" onchange="setTaskFilter('status', this.value)"></select></label>
+            <button type="button" id="flt-clear" onclick="resetTaskFilters(true)">Limpiar filtros</button>
+          </div>
+        </div>
         <select id="sprint-filter" hidden onchange="setSprintFilter(this.value)" title="Filtrar por sprint"></select>
       </div>
       <div class="ch ch-num">#</div>
@@ -1123,6 +1153,7 @@ let state = {
   listBaseWidth: 420,    // task list width without the Sprint column (user-resizable)
   ganttCollapsed: false, // gantt hidden, task list takes the full width (saved in .cronogrami)
   searchQuery: '',       // task name filter for the list/gantt (not saved)
+  filters: { phase: '', assignee: '', status: '' }, // list/gantt filters (not saved)
   undoStack: [],         // JSON snapshots of state.project before each change
   redoStack: [],
 };
@@ -2636,11 +2667,13 @@ function buildFlat() {
       children[t.parentId].push(t);
     } else roots.push(t);
   });
-  // Search: tasks whose name matches, plus their ancestors (for context)
+  // Search + filters: tasks that pass all of them, plus their ancestors (for context)
   const q = state.searchQuery.toLowerCase();
+  const filtering = activeFilterCount() > 0;
   let matchSet = null, ancestorSet = null;
-  if (q) {
-    matchSet = new Set(tasks.filter(t => (t.name || '').toLowerCase().includes(q)).map(t => t.id));
+  if (q || filtering) {
+    const passes = filtering ? taskFilterTest(tasks, byId, children) : () => true;
+    matchSet = new Set(tasks.filter(t => (!q || (t.name || '').toLowerCase().includes(q)) && passes(t)).map(t => t.id));
     ancestorSet = new Set();
     matchSet.forEach(id => {
       let p = byId[id].parentId;
@@ -2650,7 +2683,7 @@ function buildFlat() {
   // Sprint filter: only that sprint's tasks, as a flat list (parents usually aren't in a sprint)
   if (state.sprintFilter) {
     return tasks.filter(t => t.sprintId === state.sprintFilter && (!matchSet || matchSet.has(t.id)))
-      .map(task => ({ task, depth: 0, hasKids: false, searchMatch: !!matchSet }));
+      .map(task => ({ task, depth: 0, hasKids: false, searchMatch: !!q }));
   }
   const flat = [];
   if (matchSet) {
@@ -2661,7 +2694,7 @@ function buildFlat() {
         if (!visible(task.id)) continue;
         const kids = (children[task.id] || []).filter(c => visible(c.id));
         flat.push({ task, depth, hasKids: kids.length > 0, forceOpen: true,
-                    searchMatch: matchSet.has(task.id), ancestorOnly: !matchSet.has(task.id) });
+                    searchMatch: !!q && matchSet.has(task.id), ancestorOnly: !matchSet.has(task.id) });
         walkSearch(kids, depth + 1);
       }
     })(roots, 0);
@@ -2707,7 +2740,11 @@ function chartWidth() {
 function renderLeft() {
   const scroll = document.getElementById('task-scroll');
   const rows = state.flat;
-  if (!rows.length) { scroll.innerHTML = ''; return; }
+  if (!rows.length) {
+    const narrowed = state.project && (state.project.tasks || []).length && (state.searchQuery || activeFilterCount());
+    scroll.innerHTML = narrowed ? '<div class="list-no-match">Ninguna tarea coincide con la búsqueda o los filtros</div>' : '';
+    return;
+  }
   let html = '';
   rows.forEach(({task, depth, hasKids, forceOpen, searchMatch, ancestorOnly}) => {
     const late = state.viewOpts.overdueHighlight && isOverdue(task);
@@ -3823,9 +3860,12 @@ function setupKeyboard() {
     if (e.key==='Escape' && document.activeElement === searchInput) {
       clearTaskSearch(); searchInput.blur(); e.preventDefault(); return;
     }
-    // Escape: close the "Vista" menu, else the modal
+    // Escape: close the "Vista" menu or the filters menu, else the modal
     if (e.key==='Escape' && !document.getElementById('view-menu').hidden) {
       toggleViewMenu(false); e.preventDefault(); return;
+    }
+    if (e.key==='Escape' && !document.getElementById('filter-menu').hidden) {
+      toggleFilterMenu(false); e.preventDefault(); return;
     }
     if (e.key==='Escape') {
       if (!document.getElementById('modal-overlay').hidden) {
@@ -3917,6 +3957,7 @@ function loadProject(data, filename) {
     state.pxPerDay = data.pxPerDay;
   }
   state.sprintFilter = '';
+  resetTaskFilters();
   state.ganttCollapsed = data.ganttCollapsed === true;
   applyGanttCollapsed(false); // layout only; rendered below
   setProjectNameDisplay(data.project_name || data.projectName || filename || 'Proyecto sin nombre');
@@ -4029,6 +4070,94 @@ function applyGanttCollapsed(render = true) {
 // ═══════════════════════════════════════════════════════════
 // TASK SEARCH
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// TASK FILTERS (fase, responsable, estado) — display only, not saved
+// ═══════════════════════════════════════════════════════════
+const STATUS_FILTERS = [
+  { v: 'todo',    label: 'Sin empezar' },
+  { v: 'doing',   label: 'En progreso' },
+  { v: 'done',    label: 'Completada' },
+  { v: 'overdue', label: 'Vencida' },
+];
+const UNASSIGNED = '__none';
+function activeFilterCount() {
+  const f = state.filters;
+  return (f.phase ? 1 : 0) + (f.assignee ? 1 : 0) + (f.status ? 1 : 0);
+}
+// Predicate for the active filters. Phase is inherited from the nearest ancestor that has one.
+// Status only applies to leaf tasks: parents don't roll up progress, they show up as context.
+function taskFilterTest(tasks, byId, children) {
+  const { phase, assignee, status } = state.filters;
+  const phaseOf = t => {
+    for (let x = t, n = 0; x && n < 100; x = byId[x.parentId], n++) {
+      const ph = x.phaseId ?? x.phase_id;
+      if (ph) return ph;
+    }
+    return null;
+  };
+  // Overdue tasks also count as "Sin empezar" or "En progreso"; "Vencida" is checked on its own
+  const statusOf = t => {
+    const p = Number(t.progress) || 0;
+    if (t.isMilestone ? t.milestoneCompleted : p >= 100) return 'done';
+    return !t.isMilestone && p > 0 ? 'doing' : 'todo';
+  };
+  return t => {
+    if (phase && phaseOf(t) !== phase) return false;
+    if (assignee) {
+      const ids = t.assigneeIds || [];
+      // "Sin asignar" only lists leaf tasks: parents are usually unassigned on purpose
+      if (assignee === UNASSIGNED) { if (children[t.id] || ids.length || (t.responsible || '').trim()) return false; }
+      else if (!ids.includes(assignee)) return false;
+    }
+    if (status) {
+      if (children[t.id]) return false;
+      if (status === 'overdue' ? !isOverdue(t) : statusOf(t) !== status) return false;
+    }
+    return true;
+  };
+}
+function setTaskFilter(key, value) {
+  state.filters[key] = value || '';
+  rebuildAndRender(false);
+}
+function resetTaskFilters(render) {
+  state.filters = { phase: '', assignee: '', status: '' };
+  if (render) rebuildAndRender(false);
+}
+// Rebuilds the filter selects and drops filters whose phase or person no longer exists
+function refreshFilterUI() {
+  const f = state.filters;
+  const phases = [...getPhases()].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const team = getTeam();
+  if (f.phase && !phases.some(p => p.id === f.phase)) f.phase = '';
+  if (f.assignee && f.assignee !== UNASSIGNED && !team.some(m => m.id === f.assignee)) f.assignee = '';
+  const opts = (list, sel) => list.map(([v, l]) =>
+    `<option value="${escAttr(v)}"${v === sel ? ' selected' : ''}>${esc(l)}</option>`).join('');
+  const setSel = (id, list, val) => {
+    const el = document.getElementById(id);
+    el.innerHTML = opts(list, val);
+    el.value = val;
+    el.classList.toggle('active', !!val);
+  };
+  setSel('flt-phase', [['', 'Todas'], ...phases.map(p => [p.id, p.name])], f.phase);
+  setSel('flt-assignee', [['', 'Todos'], ...team.map(m => [m.id, m.name]), [UNASSIGNED, 'Sin asignar']], f.assignee);
+  setSel('flt-status', [['', 'Todos'], ...STATUS_FILTERS.map(s => [s.v, s.label])], f.status);
+  document.getElementById('flt-phase').disabled = phases.length === 0;
+  const n = activeFilterCount();
+  document.getElementById('filter-btn').classList.toggle('active', n > 0);
+  document.getElementById('filter-btn-label').textContent = n ? `Filtros (${n})` : 'Filtros';
+  document.getElementById('flt-clear').disabled = n === 0;
+}
+function toggleFilterMenu(force) {
+  const menu = document.getElementById('filter-menu');
+  const open = force !== undefined ? force : menu.hidden;
+  menu.hidden = !open;
+  document.getElementById('filter-btn').setAttribute('aria-expanded', String(open));
+}
+document.addEventListener('mousedown', e => {
+  if (!document.getElementById('filter-menu').hidden && !e.target.closest('#filter-wrap')) toggleFilterMenu(false);
+});
+
 function setSearchQuery(q) {
   state.searchQuery = (q || '').trim();
   rebuildAndRender(false);
@@ -4057,10 +4186,11 @@ function setupSearch() {
 // ═══════════════════════════════════════════════════════════
 function rebuildAndRender(scrollTodayOnLoad) {
   refreshSprintUI();
+  refreshFilterUI();
   calcRange();
+  state.overdue = computeOverdue(); // before buildFlat: the "Vencida" filter uses it
   state.flat = buildFlat();
   state.rollup = computeRollupDates();
-  state.overdue = computeOverdue();
   renderProjectHead();
   renderLeft();
   renderRuler();
