@@ -983,6 +983,24 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
   </div>
 </div>
 
+<!-- ── SHORTEN CASCADE MODAL ─────────────────────────────── -->
+<div class="cl-overlay" id="pull-modal-overlay">
+  <div class="cl-panel">
+    <div class="cl-header">
+      <div class="cl-title">Tareas dependientes</div>
+      <button class="btn-ghost" onclick="resolvePullModal('keep')" style="padding:2px 8px">✕</button>
+    </div>
+    <div class="cl-body">
+      <div id="pull-modal-msg"></div>
+    </div>
+    <div class="cl-footer" style="gap:8px">
+      <button class="btn-ghost" onclick="resolvePullModal('keep')">Mantener fechas</button>
+      <button class="btn-ghost" onclick="resolvePullModal('stretch')">Extender hacia antes</button>
+      <button class="btn-primary" onclick="resolvePullModal('move')">Adelantar</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1044,6 +1062,10 @@ function addDays(d, n) {
 }
 function diffDays(a, b) {
   return Math.round((b - a) / 86400000);
+}
+function addDaysToDate(dateStr, n) {
+  const d = parseDate(dateStr);
+  return d ? fmtDate(addDays(d, n)) : dateStr;
 }
 const MONTHS_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const MONTHS_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -2108,6 +2130,112 @@ function getBarDates(task) {
   return r || { startDate: task.startDate, endDate: task.endDate };
 }
 
+// Forward-only date cascade: pushes successors (BFS over dependencies[]) so each
+// one starts the day after its predecessor ends. Successors that already start
+// later are left alone. Returns how many tasks were moved.
+function cascadeDependencies(changedTaskId, tasks) {
+  const taskMap = {};
+  tasks.forEach(t => taskMap[t.id] = t);
+  const queue = [changedTaskId];
+  const visited = new Set();
+  const moved = new Set();
+  while (queue.length) {
+    const predId = queue.shift();
+    if (visited.has(predId)) continue;
+    visited.add(predId);
+    if (visited.size > tasks.length) { console.warn('Circular dependency detected'); break; }
+    const pred = taskMap[predId];
+    if (!pred || !pred.endDate) continue;
+    const newStart = addDaysToDate(pred.endDate, 1);
+    tasks.forEach(task => {
+      if (!(task.dependencies || []).includes(predId)) return;
+      if (task.startDate && newStart <= task.startDate) return;
+      // Keep the task's calendar span (end - start) so weekends inside it are preserved
+      const span = (task.startDate && task.endDate)
+        ? diffDays(parseDate(task.startDate), parseDate(task.endDate))
+        : Math.max(0, (task.durationDays ?? task.duration ?? 1) - 1);
+      task.startDate = newStart;
+      task.endDate = task.isMilestone ? newStart : addDaysToDate(newStart, Math.max(0, span));
+      moved.add(task.id);
+      queue.push(task.id);
+    });
+  }
+  return moved.size;
+}
+
+// Successors that start right after predId's previous end (attached to it).
+function getAttachedSuccessors(predId, prevEndDate, tasks) {
+  const limit = addDaysToDate(prevEndDate, 1);
+  return tasks.filter(t => (t.dependencies || []).includes(predId) && t.startDate && t.startDate <= limit);
+}
+
+// Backward counterpart of cascadeDependencies, used when a task is shortened.
+// Only successors attached to the old end are touched, and none starts before
+// the day after its latest predecessor ends.
+// mode 'move': shift earlier keeping their span, and continue down the chain.
+// mode 'stretch': only the start moves earlier (end stays), so the chain stops there.
+function pullDependencies(changedTaskId, prevEndDate, mode, tasks) {
+  const taskMap = {};
+  tasks.forEach(t => taskMap[t.id] = t);
+  const queue = [[changedTaskId, prevEndDate]];
+  const visited = new Set();
+  const moved = new Set();
+  while (queue.length) {
+    const [predId, predPrevEnd] = queue.shift();
+    if (visited.has(predId)) continue;
+    visited.add(predId);
+    if (visited.size > tasks.length) { console.warn('Circular dependency detected'); break; }
+    getAttachedSuccessors(predId, predPrevEnd, tasks).forEach(task => {
+      if (visited.has(task.id)) return;
+      let earliest = null;
+      (task.dependencies || []).forEach(depId => {
+        const dep = taskMap[depId];
+        if (!dep || !dep.endDate) return;
+        const d = addDaysToDate(dep.endDate, 1);
+        if (!earliest || d > earliest) earliest = d;
+      });
+      if (!earliest || earliest >= task.startDate) return;
+      const oldEnd = task.endDate;
+      if (task.isMilestone) {
+        task.startDate = task.endDate = earliest;
+      } else if (mode === 'stretch') {
+        task.startDate = earliest;
+        task.duration = diffDays(parseDate(earliest), parseDate(task.endDate));
+        moved.add(task.id);
+        return;
+      } else {
+        const span = diffDays(parseDate(task.startDate), parseDate(task.endDate));
+        task.startDate = earliest;
+        task.endDate = addDaysToDate(earliest, Math.max(0, span));
+      }
+      moved.add(task.id);
+      queue.push([task.id, oldEnd]);
+    });
+  }
+  return moved.size;
+}
+
+let pullModalCtx = null;
+function openPullModal(taskId, prevEndDate) {
+  const task = getTaskById(taskId);
+  const succ = getAttachedSuccessors(taskId, prevEndDate, state.project.tasks);
+  const names = succ.map(t => `"${t.name}"`).join(', ');
+  document.getElementById('pull-modal-msg').textContent =
+    `"${task.name}" ahora termina antes. ¿Qué hacemos con ${succ.length === 1 ? 'la tarea que depende' : 'las tareas que dependen'} de ella (${names})?` +
+    ' Adelantar las mueve antes manteniendo su duración. Extender hacia antes adelanta su inicio y deja su fin igual. Mantener no cambia nada.';
+  pullModalCtx = { taskId, prevEndDate };
+  document.getElementById('pull-modal-overlay').classList.add('open');
+}
+
+function resolvePullModal(mode) {
+  document.getElementById('pull-modal-overlay').classList.remove('open');
+  const ctx = pullModalCtx; pullModalCtx = null;
+  if (!ctx || mode === 'keep') return;
+  const n = pullDependencies(ctx.taskId, ctx.prevEndDate, mode, state.project.tasks);
+  if (n > 0) showToast(`${n} ${n === 1 ? 'tarea actualizada' : 'tareas actualizadas'} por dependencia`);
+  rebuildAndRender(false);
+}
+
 function renumberTasks() {
   if (!state.project) return;
   const tasks = state.project.tasks;
@@ -3115,14 +3243,23 @@ function saveModal() {
   }
 
   const sprintId = getSprints().length ? (document.getElementById('m-sprint').value || null) : null;
+  let pullAsk = null;
 
   if (modalEditId) {
     const task = getTaskById(modalEditId);
     if (!task) { closeModal(); return; }
     if (getSprints().length) task.sprintId = sprintId;
+    const prevEndDate = task.endDate;
     task.name = name; task.startDate = startDate; task.endDate = endDate;
     task.duration = duration; task.progress = progress;
     task.responsible = responsible; task.assigneeIds = assigneeIds; task.color = modalColor; task.isMilestone = isMilestone;
+    if (prevEndDate && endDate > prevEndDate) {
+      const n = cascadeDependencies(task.id, state.project.tasks);
+      if (n > 0) showToast(`${n} ${n === 1 ? 'tarea actualizada' : 'tareas actualizadas'} por dependencia`);
+    } else if (prevEndDate && endDate < prevEndDate &&
+               getAttachedSuccessors(task.id, prevEndDate, state.project.tasks).length) {
+      pullAsk = { taskId: task.id, prevEndDate };
+    }
   } else {
     let parentId = null;
     if (state.selectedId) {
@@ -3141,7 +3278,8 @@ function saveModal() {
 
   renumberTasks();
   closeModal();
-  rebuildAndRender();
+  rebuildAndRender(false);
+  if (pullAsk) openPullModal(pullAsk.taskId, pullAsk.prevEndDate);
 }
 
 function showDeleteConfirm() {
