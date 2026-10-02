@@ -370,6 +370,10 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 .tm-swatch.active{border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.4);transform:scale(1.1)}
 
 /* ── ASSIGNEE PICKER ─────────────────────────────────────── */
+#m-deps-wrap{max-height:148px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 0}
+#m-deps-wrap::-webkit-scrollbar{width:4px}
+#m-deps-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+#m-deps-wrap .assignee-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #m-assignees-wrap{max-height:148px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 0}
 #m-assignees-wrap::-webkit-scrollbar{width:4px}
 #m-assignees-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
@@ -704,6 +708,10 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
         <div id="m-assignees-wrap" hidden></div>
         <input type="text" id="m-resp" class="m-input" autocomplete="off" placeholder="Nombre del responsable">
       </div>
+      <div class="m-field" id="m-deps-field" hidden>
+        <div class="m-label">Depende de</div>
+        <div id="m-deps-wrap"></div>
+      </div>
       <div class="m-field" id="m-sprint-field" hidden>
         <div class="m-label">Sprint</div>
         <select id="m-sprint" class="m-input"></select>
@@ -983,7 +991,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
       </button>
       <input type="file" id="ex-import-input" accept=".xlsx,.xls,.csv" style="display:none"
         onchange="if(this.files[0]) importXLSX(this.files[0]); this.value=''">
-      <div class="ex-hint">Columnas reconocidas: Nombre, Inicio, Fin (obligatorias), Progreso, Notas, Hito, Fase y Asignados. Las tareas se agregan al final del proyecto.</div>
+      <div class="ex-hint">Columnas reconocidas: Nombre, Inicio, Fin, Días, Asignados, Fase, Hito, Sprint, Progreso, Depende de. Las tareas se agregan al final del proyecto.</div>
     </div>
     <div class="cl-footer">
       <button class="btn-primary" onclick="closeExportModal()">Cerrar</button>
@@ -1106,6 +1114,23 @@ let teamMemberColor = TEAM_COLORS[0];
 // ═══════════════════════════════════════════════════════════
 // ASSIGNEE PICKER (in task modal)
 // ═══════════════════════════════════════════════════════════
+// Dependency picker: every task except the one being edited and its descendants.
+function renderDependencyPicker(taskId, selectedIds) {
+  const wrap = document.getElementById('m-deps-wrap');
+  const excluded = new Set([taskId, ...getAllDescendants(taskId)]);
+  const opts = (state.project?.tasks || [])
+    .filter(t => !excluded.has(t.id))
+    .sort((a, b) => (a.taskNum || 0) - (b.taskNum || 0));
+  wrap.innerHTML = opts.length ? opts.map(t => {
+    const checked = selectedIds.includes(t.id) ? 'checked' : '';
+    const label = '#' + t.taskNum + ' — ' + t.name;
+    return `<label class="assignee-row" title="${escAttr(label)}">
+      <input type="checkbox" data-id="${escAttr(t.id)}" ${checked}>
+      <span class="assignee-name">${esc(label)}</span>
+    </label>`;
+  }).join('') : '<div class="assignee-row" style="cursor:default;color:var(--fg3)">No hay otras tareas</div>';
+}
+
 function renderAssigneePicker(selectedIds) {
   const wrap = document.getElementById('m-assignees-wrap');
   const team = getTeam();
@@ -1451,7 +1476,14 @@ function exportPDF() {
 }
 
 // ─── XLSX ────────────────────────────────────────────────
-const XLSX_TASK_COLS = ['ID', 'Nombre', 'Inicio', 'Fin', 'Duración (días)', 'Fase', 'Asignados', 'Progreso (%)', 'Hito', 'Notas', 'Sprint'];
+// Same 16 columns as the Python version
+const XLSX_TASK_COLS = [
+  'ID', 'Nombre', 'Tipo', 'Tarea Raiz',
+  'Inicio', 'Días', 'Fin',
+  'Responsables', 'Fase', 'Sprint',
+  '% Avance', 'Completada', 'Go Live', 'Lado',
+  'Depende de', 'Notas'
+];
 
 function taskIsMilestone(t) { return !!(t.isMilestone ?? t.milestone); }
 function taskDurationDays(t) {
@@ -1465,6 +1497,18 @@ function taskAssigneeNames(t) {
   const names = (t.assigneeIds || t.assignees || []).map(id => getTeamMember(id)?.name).filter(Boolean);
   return names.length ? names.join(', ') : (t.responsible || '');
 }
+function taskTypeLabel(t) {
+  if (t.parentId == null) return 'Fase';
+  if (taskIsMilestone(t)) return 'Hito';
+  if (t.isGoLive) return 'Go Live';
+  return 'Tarea';
+}
+// "Ambos" / "Cliente" / "Softbotic" from the assignees' org; '' when none
+function taskSideLabel(t) {
+  const orgs = new Set((t.assigneeIds || []).map(id => getTeamMember(id)?.org).filter(Boolean));
+  const cli = orgs.has('cliente'), sb = orgs.has('softbotic');
+  return cli && sb ? 'Ambos' : cli ? 'Cliente' : sb ? 'Softbotic' : '';
+}
 
 function exportXLSX() {
   if (!hasTasksToExport()) return;
@@ -1476,24 +1520,29 @@ function exportXLSX() {
       // Sprint name; unnamed sprints (e.g. autogenerated) export as "Sprint N"
       const sprint = t.sprintId ? getSprintById(t.sprintId) : null;
       return {
-        'ID': t.id,
+        'ID': t.taskNum,
         'Nombre': t.name || '',
+        'Tipo': taskTypeLabel(t),
+        'Tarea Raiz': t.parentId ? (getTaskById(t.parentId)?.name || '') : '',
         'Inicio': t.startDate || t.start || '',
+        'Días': taskDurationDays(t),
         'Fin': t.endDate || t.end || '',
-        'Duración (días)': taskDurationDays(t),
+        'Responsables': taskAssigneeNames(t),
         'Fase': phase ? phase.name : '',
-        'Asignados': taskAssigneeNames(t),
-        'Progreso (%)': Number(t.progress) || 0,
-        'Hito': taskIsMilestone(t) ? 'Sí' : 'No',
-        'Notas': t.notes || '',
         'Sprint': sprint ? sprintDisplayName(sprint) : '',
+        '% Avance': Number(t.progress) || 0,
+        'Completada': Number(t.progress) >= 100 ? 'Sí' : 'No',
+        'Go Live': t.isGoLive ? 'Sí' : 'No',
+        'Lado': taskSideLabel(t),
+        'Depende de': (t.dependencies || []).map(depId => getTaskById(depId)?.taskNum).filter(Boolean).join(', '),
+        'Notas': t.notes || '',
       };
     });
     const holidayRows = getHolidays().map(h => ({ 'Fecha': h.date, 'Nombre': h.name || '' }));
 
     const wb = XLSX.utils.book_new();
     const wsTasks = XLSX.utils.json_to_sheet(taskRows, { header: XLSX_TASK_COLS });
-    wsTasks['!cols'] = [12, 36, 12, 12, 14, 18, 28, 12, 7, 30, 16].map(wch => ({ wch }));
+    wsTasks['!cols'] = [6, 36, 8, 28, 12, 6, 12, 28, 18, 16, 10, 10, 10, 12, 16, 30].map(wch => ({ wch }));
     XLSX.utils.book_append_sheet(wb, wsTasks, 'Tareas');
     const wsHol = XLSX.utils.json_to_sheet(holidayRows, { header: ['Fecha', 'Nombre'] });
     wsHol['!cols'] = [{ wch: 12 }, { wch: 30 }];
@@ -1511,12 +1560,23 @@ const IMPORT_COLS = {
   name:      ['nombre', 'name', 'tarea'],
   start:     ['inicio', 'start', 'fechainicio'],
   end:       ['fin', 'end', 'fechafin'],
-  progress:  ['progreso', 'progress'],
+  days:      ['dias', 'duracion', 'duraciondias', 'duration'],
+  progress:  ['progreso', 'progress', 'avance', '% avance'],
   notes:     ['notas', 'notes'],
   milestone: ['hito', 'milestone'],
   phase:     ['fase', 'phase'],
-  assignees: ['asignados', 'assignees'],
+  assignees: ['asignados', 'assignees', 'responsables'],
+  sprint:    ['sprint'],
+  taskNum: ['id', 'tasknum', 'num', '#'],
+  parentName: ['tarea raiz', 'tarea raíz', 'parent', 'padre'],
+  tipo: ['tipo', 'type'],
+  completada: ['completada', 'completed'],
+  goLive: ['go live', 'golive'],
+  lado: ['lado', 'side'],
+  depNames: ['depende de', 'depends on', 'dependencias'],
 };
+const IMPORT_KEYS = Object.fromEntries(Object.entries(IMPORT_COLS)
+  .map(([field, aliases]) => [field, aliases.map(normKey).filter(Boolean)]));
 function normKey(k) {
   return String(k).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -1556,21 +1616,25 @@ function importXLSX(file) {
 
     ensureProject();
     pushUndo();
-    const phases = getPhases(), team = getTeam();
+    const phases = getPhases(), team = getTeam(), sprints = getSprints();
+    const prevTasks = state.project.tasks.slice();
     const stamp = Date.now();
+    const imported = []; // [{ task, f }] for the second pass
     let added = 0, skipped = 0;
     rows.forEach((row, index) => {
       const f = {};
       Object.entries(row).forEach(([k, v]) => {
         const nk = normKey(k);
-        for (const [field, aliases] of Object.entries(IMPORT_COLS)) {
-          if (f[field] === undefined && aliases.includes(nk)) f[field] = v;
+        for (const [field, keys] of Object.entries(IMPORT_KEYS)) {
+          if (f[field] === undefined && keys.includes(nk)) f[field] = v;
         }
       });
       const name = String(f.name ?? '').trim();
       const start = parseImportDate(f.start);
-      const isMilestone = isTruthyCell(f.milestone);
+      const isMilestone = isTruthyCell(f.milestone) || normKey(f.tipo ?? '') === 'hito';
       let end = parseImportDate(f.end);
+      const days = parseInt(f.days);
+      if (!end && start && !isNaN(days) && days >= 0) end = addDaysToDate(start, days);
       if (!name || !start || !end) { skipped++; return; }
       if (isMilestone) end = start;
       if (end < start) { skipped++; return; }
@@ -1578,8 +1642,10 @@ function importXLSX(file) {
       const phase = f.phase ? phases.find(p => normKey(p.name) === normKey(f.phase)) : null;
       const names = String(f.assignees ?? '').split(',').map(x => x.trim()).filter(Boolean);
       const assigneeIds = names.map(n => team.find(m => normKey(m.name) === normKey(n))?.id).filter(Boolean);
-      const progress = Math.max(0, Math.min(100, Math.round(parseFloat(f.progress) || 0)));
-      state.project.tasks.push({
+      let progress = Math.max(0, Math.min(100, Math.round(parseFloat(f.progress) || 0)));
+      if (isTruthyCell(f.completada)) progress = 100;
+      const sprint = f.sprint ? sprints.find(sp => normKey(sprintDisplayName(sp)) === normKey(f.sprint)) : null;
+      const task = {
         id: 't_' + stamp + '_' + index,
         taskNum: 0, name, startDate: start, endDate: end,
         duration: isMilestone ? 0 : diffDays(parseDate(start), parseDate(end)),
@@ -1590,8 +1656,35 @@ function importXLSX(file) {
         parentId: null, phaseId: phase?.id || null,
         dependencies: [], isMilestone,
         notes: String(f.notes ?? '').trim(),
-      });
+      };
+      if (isTruthyCell(f.goLive)) task.isGoLive = true;
+      if (sprint) task.sprintId = sprint.id;
+      state.project.tasks.push(task);
+      imported.push({ task, f });
       added++;
+    });
+
+    // Second pass, once every task exists: parent ("Tarea Raiz") and dependencies ("Depende de").
+    // Dependency numbers refer to the file's own ID column; without it, to the project's current numbering.
+    const byFileNum = {};
+    imported.forEach(({ task, f }) => {
+      const n = parseInt(f.taskNum);
+      if (!isNaN(n)) byFileNum[n] = task.id;
+    });
+    const hasFileNums = Object.keys(byFileNum).length > 0;
+    imported.forEach(({ task, f }, i) => {
+      const parentName = normKey(f.parentName ?? '');
+      if (parentName) {
+        // Closest preceding imported row with that name, else an existing task
+        const parent = imported.slice(0, i).reverse().map(x => x.task).find(t => normKey(t.name) === parentName)
+          || prevTasks.find(t => normKey(t.name) === parentName);
+        if (parent) task.parentId = parent.id;
+      }
+      task.dependencies = [...new Set(String(f.depNames ?? '').split(/[,;]/)
+        .map(x => parseInt(String(x).replace('#', '').trim()))
+        .filter(n => !isNaN(n))
+        .map(n => hasFileNums ? byFileNum[n] : prevTasks.find(t => t.taskNum === n)?.id)
+        .filter(id => id && id !== task.id))];
     });
 
     renumberTasks();
@@ -2374,7 +2467,7 @@ function renderLeft() {
   rows.forEach(({task, depth, hasKids, forceOpen, searchMatch, ancestorOnly}) => {
     const sel = (task.id === state.selectedId ? ' selected' : '') + (ancestorOnly ? ' tr-ancestor-only' : '');
     const nameClass = task.parentId == null ? ' phase' : (task.isMilestone ? ' milestone' : '');
-    const indent = depth * 14;
+    const indent = depth * 24;
     const isOpen = forceOpen || state.expanded.has(task.id);
     const bd = getBarDates(task);
     const s = fmtShort(parseDate(bd.startDate));
@@ -3208,6 +3301,10 @@ function openModal(taskId) {
     sprintsForModal.map(sp => `<option value="${escAttr(sp.id)}">${sprintOptionLabel(sp)}</option>`).join('');
   document.getElementById('m-sprint').value = (task.sprintId && getSprintById(task.sprintId)) ? task.sprintId : '';
 
+  // Dependencies (edit mode only; new tasks start with dependencies: [])
+  document.getElementById('m-deps-field').hidden = !modalEditId;
+  if (modalEditId) renderDependencyPicker(modalEditId, task.dependencies || []);
+
   selectModalColor(task.color || '#3b82f6');
   updateMilestoneFields(!!task.isMilestone);
 
@@ -3275,6 +3372,9 @@ function saveModal() {
     task.name = name; task.startDate = startDate; task.endDate = endDate;
     task.duration = duration; task.progress = progress;
     task.responsible = responsible; task.assigneeIds = assigneeIds; task.color = modalColor; task.isMilestone = isMilestone;
+    const selectedDepIds = new Set();
+    document.querySelectorAll('#m-deps-wrap input[type=checkbox]').forEach(cb => { if (cb.checked) selectedDepIds.add(cb.dataset.id); });
+    task.dependencies = Array.from(selectedDepIds);
     if (prevEndDate && endDate > prevEndDate) {
       const n = cascadeDependencies(task.id, state.project.tasks);
       if (n > 0) showToast(`${n} ${n === 1 ? 'tarea actualizada' : 'tareas actualizadas'} por dependencia`);
