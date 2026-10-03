@@ -1,19 +1,40 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cronogrami Web</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap">
+<script>
+// Theme before first paint (no flash): saved choice, else the system preference
+const THEME_KEY = 'cronogrami-theme';
+(function () {
+  let t = null;
+  try { t = localStorage.getItem(THEME_KEY); } catch (e) {}
+  if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  document.documentElement.dataset.theme = t;
+})();
+</script>
 <style>
-:root {
+/* Theme: data-theme="dark" | "light" on <html>, set before first paint (script below)
+   and toggled from the "Vista" menu. Every color in the app comes from these variables;
+   the --cv-* ones are read by the canvas code (ruler/Gantt), --pdf-* by the PDF export. */
+:root[data-theme="dark"] {
+  --scheme: dark;
   --bg: #111827;
   --surface: #1f2937;
   --surface2: #253347;
   --toolbar: #0f1a2d;
   --accent: #84cc16;
+  --accent-hover: #96da1a;
   --accent-dim: #4b7a0d;
+  --on-accent: #0d1a00;
+  --accent-soft: rgba(132,204,22,.12);
+  --accent-soft2: rgba(132,204,22,.15);
+  --accent-soft3: rgba(132,204,22,.25);
+  --accent-line: rgba(132,204,22,.35);
+  --accent-line2: rgba(132,204,22,.5);
   --fg: #e2e8f0;
   --fg2: #94a3b8;
   --fg3: #64748b;
@@ -27,7 +48,189 @@
   --grid: rgba(255,255,255,.04);
   --today: rgba(239,68,68,.75);
   --danger: #ef4444;
+  --danger-soft: rgba(239,68,68,.12);
+  --danger-soft2: rgba(239,68,68,.15);
+  --danger-soft3: rgba(239,68,68,.22);
+  --danger-line: rgba(239,68,68,.25);
+  --danger-line2: rgba(239,68,68,.45);
+  --danger-fg: #fca5a5;
+  --warn: #ea580c;
+  --on-color: #ffffff;
+  --swatch-ring: #ffffff;
+  --swatch-ring-soft: rgba(255,255,255,.4);
+  --overlay: rgba(0,0,0,.65);
+  --overlay-soft: rgba(0,0,0,.55);
+  --shadow: rgba(0,0,0,.35);
+  --shadow-md: rgba(0,0,0,.45);
+  --shadow-lg: rgba(0,0,0,.5);
+  --shadow-xl: rgba(0,0,0,.6);
+  --shadow-modal: rgba(0,0,0,.65);
+  --tooltip-bg: #1e2d3d;
+  --search-hl-bg: #fef08a;
+  --search-hl-fg: #1e293b;
+  --date-calc: #94a3b8;
+  --tag-softbotic-bg: rgba(59,130,246,.18);
+  --tag-softbotic-fg: #93c5fd;
+  --tag-cliente-bg: rgba(16,185,129,.15);
+  --tag-cliente-fg: #6ee7b7;
+  --tag-otro-bg: rgba(148,163,184,.12);
+  --load-track: #cbd5e1;
+  --load-done: #22c55e;
+  --load-prog: #3b82f6;
+  --load-late: #ef4444;
+  --st-open: #f87171;
+  --st-follow: #fbbf24;
+  --appr-pendiente: #fbbf24;
+  --appr-observaciones: #fb923c;
+  --appr-aprobado: #84cc16;
+  --appr-rechazado: #ef4444;
+  /* canvas: ruler + Gantt */
+  --cv-bg: #111827;
+  --cv-ruler: #0f1a2d;
+  --cv-line: #2d3f52;
+  --cv-label: #94a3b8;
+  --cv-label2: #64748b;
+  --cv-label-weekend: #4b5563;
+  --cv-hint: #2d3f52;
+  --cv-weekend: rgba(0,0,0,.18);
+  --cv-weekend-ruler: rgba(0,0,0,.2);
+  --cv-strip: rgba(0,0,0,.25);
+  --cv-strip-line: rgba(255,255,255,.06);
+  --cv-grid: rgba(255,255,255,.04);
+  --cv-row-line: rgba(255,255,255,.03);
+  --cv-row-alt: rgba(25,36,52,.6);
+  --cv-phase-text: #e2e8f0;
+  --cv-bar-text: #e2e8f0;
+  --cv-selected: #ffffff;
+  --cv-dep: rgba(148,163,184,.55);
+  --cv-danger: #ef4444;
+  --cv-milestone: #f59e0b;
+  --cv-holiday: rgba(239,68,68,.12);
+  --cv-holiday-edge: rgba(239,68,68,.4);
+  --cv-today: rgba(239,68,68,.9);
+  --cv-today-ruler: rgba(239,68,68,.85);
+  --cv-today-dash: rgba(239,68,68,.3);
+  --cv-sprint-band: rgba(132,204,22,.08);
+  --cv-sprint-edge: rgba(132,204,22,.5);
+  --cv-sprint-line: rgba(132,204,22,.2);
+  --cv-title-bg: #0f1a2d;
+  --cv-title-fg: #ffffff;
+  /* PDF export (hex only: parsed to RGB for jsPDF) */
+  --pdf-text: #141414;
+  --pdf-head-bg: #0f1a2d;
+  --pdf-head-fg: #94a3b8;
+  --pdf-row-even: #161f2f;
+  --pdf-row-odd: #111827;
+  --pdf-num: #64748b;
+  --pdf-name: #e2e8f0;
+  --pdf-line: #334155;
   color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --scheme: light;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface2: #eef2f7;
+  --toolbar: #f1f5f9;
+  --accent: #65a30d;
+  --accent-hover: #77b815;
+  --accent-dim: #a3d65c;
+  --on-accent: #0d1a00;
+  --accent-soft: rgba(101,163,13,.12);
+  --accent-soft2: rgba(101,163,13,.14);
+  --accent-soft3: rgba(101,163,13,.24);
+  --accent-line: rgba(101,163,13,.4);
+  --accent-line2: rgba(101,163,13,.55);
+  --fg: #0f172a;
+  --fg2: #475569;
+  --fg3: #64748b;
+  --border: #d6dde6;
+  --border2: #e5eaf0;
+  --row-even: #ffffff;
+  --row-odd: #f8fafc;
+  --row-hover: #eef2f7;
+  --row-selected: rgba(101,163,13,.14);
+  --milestone: #d97706;
+  --grid: rgba(15,23,42,.06);
+  --today: rgba(220,38,38,.75);
+  --danger: #dc2626;
+  --danger-soft: rgba(220,38,38,.08);
+  --danger-soft2: rgba(220,38,38,.1);
+  --danger-soft3: rgba(220,38,38,.16);
+  --danger-line: rgba(220,38,38,.3);
+  --danger-line2: rgba(220,38,38,.5);
+  --danger-fg: #b91c1c;
+  --warn: #ea580c;
+  --on-color: #ffffff;
+  --swatch-ring: #0f172a;
+  --swatch-ring-soft: rgba(15,23,42,.3);
+  --overlay: rgba(15,23,42,.4);
+  --overlay-soft: rgba(15,23,42,.32);
+  --shadow: rgba(15,23,42,.12);
+  --shadow-md: rgba(15,23,42,.16);
+  --shadow-lg: rgba(15,23,42,.18);
+  --shadow-xl: rgba(15,23,42,.2);
+  --shadow-modal: rgba(15,23,42,.25);
+  --tooltip-bg: #ffffff;
+  --search-hl-bg: #fef08a;
+  --search-hl-fg: #1e293b;
+  --date-calc: #64748b;
+  --tag-softbotic-bg: rgba(59,130,246,.12);
+  --tag-softbotic-fg: #1d4ed8;
+  --tag-cliente-bg: rgba(16,185,129,.12);
+  --tag-cliente-fg: #047857;
+  --tag-otro-bg: rgba(100,116,139,.12);
+  --load-track: #e2e8f0;
+  --load-done: #22c55e;
+  --load-prog: #3b82f6;
+  --load-late: #ef4444;
+  --st-open: #dc2626;
+  --st-follow: #b45309;
+  --appr-pendiente: #f59e0b;
+  --appr-observaciones: #f97316;
+  --appr-aprobado: #65a30d;
+  --appr-rechazado: #dc2626;
+  /* canvas: ruler + Gantt */
+  --cv-bg: #ffffff;
+  --cv-ruler: #f1f5f9;
+  --cv-line: #d6dde6;
+  --cv-label: #475569;
+  --cv-label2: #64748b;
+  --cv-label-weekend: #a0aec0;
+  --cv-hint: #94a3b8;
+  --cv-weekend: rgba(15,23,42,.035);
+  --cv-weekend-ruler: rgba(15,23,42,.05);
+  --cv-strip: rgba(15,23,42,.04);
+  --cv-strip-line: rgba(15,23,42,.08);
+  --cv-grid: rgba(15,23,42,.06);
+  --cv-row-line: rgba(15,23,42,.05);
+  --cv-row-alt: rgba(241,245,249,.7);
+  --cv-phase-text: #1e293b;
+  --cv-bar-text: #0f172a;
+  --cv-selected: #0f172a;
+  --cv-dep: rgba(71,85,105,.6);
+  --cv-danger: #dc2626;
+  --cv-milestone: #d97706;
+  --cv-holiday: rgba(220,38,38,.08);
+  --cv-holiday-edge: rgba(220,38,38,.35);
+  --cv-today: rgba(220,38,38,.9);
+  --cv-today-ruler: rgba(220,38,38,.85);
+  --cv-today-dash: rgba(220,38,38,.35);
+  --cv-sprint-band: rgba(101,163,13,.08);
+  --cv-sprint-edge: rgba(101,163,13,.55);
+  --cv-sprint-line: rgba(101,163,13,.25);
+  --cv-title-bg: #f1f5f9;
+  --cv-title-fg: #0f172a;
+  /* PDF export (hex only: parsed to RGB for jsPDF) */
+  --pdf-text: #141414;
+  --pdf-head-bg: #f1f5f9;
+  --pdf-head-fg: #475569;
+  --pdf-row-even: #f5f8fb;
+  --pdf-row-odd: #ffffff;
+  --pdf-num: #64748b;
+  --pdf-name: #0f172a;
+  --pdf-line: #cbd5e1;
+  color-scheme: light;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;font-size:13px}
@@ -67,8 +270,8 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
   font-size:12px;font-family:inherit;white-space:nowrap;transition:background .12s,color .12s;
 }
 .tb-btn:hover{background:var(--surface2);color:var(--fg)}
-.tb-btn.accent{background:var(--accent);color:#0d1a00;font-weight:600}
-.tb-btn.accent:hover{background:#96da1a}
+.tb-btn.accent{background:var(--accent);color:var(--on-accent);font-weight:600}
+.tb-btn.accent:hover{background:var(--accent-hover)}
 .tb-btn svg{flex-shrink:0}
 .tb-btn:disabled{opacity:.35;cursor:default;background:transparent;color:var(--fg2)}
 /* "Archivo" / "Proyecto" / "Calendario" menus: dropdowns of actions (open a modal) */
@@ -76,7 +279,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 .tb-menu{
   position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:170px;
   background:var(--surface);border:1px solid var(--border);border-radius:8px;
-  padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;flex-direction:column;
+  padding:6px;box-shadow:0 8px 24px var(--shadow);display:flex;flex-direction:column;
 }
 .tb-menu[hidden]{display:none}
 .tb-menu-item{
@@ -90,7 +293,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 #view-menu{
   position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:250px;
   background:var(--surface);border:1px solid var(--border);border-radius:8px;
-  padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.35);
+  padding:6px;box-shadow:0 8px 24px var(--shadow);
 }
 #view-menu .vm-title{font-size:11px;font-weight:500;color:var(--fg3);text-transform:uppercase;letter-spacing:.45px;padding:4px 8px 6px}
 #view-menu label{
@@ -99,13 +302,20 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 }
 #view-menu label:hover{background:var(--surface2);color:var(--fg)}
 #view-menu input{width:14px;height:14px;accent-color:var(--accent);cursor:pointer}
+#view-menu .vm-sep{height:1px;background:var(--border);margin:4px 2px}
+#theme-toggle{
+  display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:none;border-radius:5px;
+  background:transparent;color:var(--fg2);font-size:12px;font-family:inherit;text-align:left;cursor:pointer;
+}
+#theme-toggle:hover,#theme-toggle:focus-visible{background:var(--surface2);color:var(--fg);outline:none}
+#theme-toggle .vm-ic{width:14px;text-align:center;flex-shrink:0}
 .view-grp{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:7px;overflow:hidden}
 .view-btn{
   padding:5px 11px;border:none;background:transparent;color:var(--fg2);cursor:pointer;
   font-size:12px;font-family:inherit;transition:background .12s,color .12s;
 }
 .view-btn:hover{background:var(--surface2);color:var(--fg)}
-.view-btn.active{background:var(--accent);color:#0d1a00;font-weight:600}
+.view-btn.active{background:var(--accent);color:var(--on-accent);font-weight:600}
 #zoom-grp{display:flex;gap:2px}
 .zoom-btn{
   width:26px;height:26px;border:1px solid var(--border);border-radius:5px;
@@ -172,7 +382,7 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 #list-tools{position:absolute;top:8px;left:8px;right:8px;display:flex;gap:6px;align-items:center}
 #sprint-filter{flex-shrink:0;max-width:50%;
   background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg2);
-  font-family:inherit;font-size:11px;padding:3px 6px;outline:none;color-scheme:dark;cursor:pointer}
+  font-family:inherit;font-size:11px;padding:3px 6px;outline:none;color-scheme:var(--scheme);cursor:pointer}
 #sprint-filter:focus{border-color:var(--accent)}
 #sprint-filter.active{border-color:var(--accent);color:var(--accent)}
 .search-wrap{position:relative;flex:1;min-width:0}
@@ -189,18 +399,18 @@ body{background:var(--bg);color:var(--fg);display:flex;flex-direction:column}
 #filter-btn.active{border-color:var(--accent);color:var(--accent)}
 #filter-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:50;width:220px;
   background:var(--surface);border:1px solid var(--border);border-radius:8px;
-  padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:8px}
+  padding:8px;box-shadow:0 8px 24px var(--shadow);display:flex;flex-direction:column;gap:8px}
 #filter-menu[hidden]{display:none}
 #filter-menu label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--fg3);text-transform:uppercase;letter-spacing:.45px}
 #filter-menu select{background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--fg);
-  font-family:inherit;font-size:12px;padding:4px 6px;outline:none;color-scheme:dark;cursor:pointer;text-transform:none;letter-spacing:0}
+  font-family:inherit;font-size:12px;padding:4px 6px;outline:none;color-scheme:var(--scheme);cursor:pointer;text-transform:none;letter-spacing:0}
 #filter-menu select:focus{border-color:var(--accent)}
 #filter-menu select.active{border-color:var(--accent)}
 #flt-clear{align-self:flex-end;background:none;border:none;color:var(--fg3);font-family:inherit;font-size:11px;cursor:pointer;padding:2px 0}
 #flt-clear:hover:not(:disabled){color:var(--accent)}
 #flt-clear:disabled{opacity:.4;cursor:default}
 .list-no-match{padding:16px 12px;font-size:12px;color:var(--fg3);text-align:center}
-.search-hl{background:#fef08a;color:#1e293b;border-radius:2px}
+.search-hl{background:var(--search-hl-bg);color:var(--search-hl-fg);border-radius:2px}
 .tr-ancestor-only{opacity:0.5}
 #task-scroll{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;position:relative}
 /* Drag to reorder rows */
@@ -251,7 +461,7 @@ body.row-dragging.row-drop-no,body.row-dragging.row-drop-no *{cursor:not-allowed
 }
 .tr-date.w74{width:74px}
 .tr-date.w42{width:42px;text-align:center}
-.tr-date.calc{color:#94a3b8;font-style:italic}
+.tr-date.calc{color:var(--date-calc);font-style:italic}
 .tr-resp{
   width:86px;font-size:10px;color:var(--fg3);overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap;padding:0 6px;flex-shrink:0;
@@ -273,9 +483,9 @@ body.row-dragging.row-drop-no,body.row-dragging.row-drop-no *{cursor:not-allowed
 
 /* ── TOOLTIP ─────────────────────────────────────────────── */
 #tooltip{
-  position:fixed;background:#1e2d3d;border:1px solid var(--border);
+  position:fixed;background:var(--tooltip-bg);border:1px solid var(--border);
   border-radius:8px;padding:10px 12px;pointer-events:none;z-index:200;
-  font-size:12px;max-width:240px;box-shadow:0 8px 24px rgba(0,0,0,.6);
+  font-size:12px;max-width:240px;box-shadow:0 8px 24px var(--shadow-xl);
   display:none;
 }
 #tooltip strong{color:var(--fg);display:block;margin-bottom:4px}
@@ -288,7 +498,7 @@ body.row-dragging.row-drop-no,body.row-dragging.row-drop-no *{cursor:not-allowed
 #ctx-menu{
   position:fixed;z-index:300;min-width:210px;max-width:300px;
   background:var(--surface);border:1px solid var(--border);border-radius:8px;
-  padding:5px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-size:12px;
+  padding:5px;box-shadow:0 8px 24px var(--shadow-md);font-size:12px;
 }
 #ctx-menu .cm-title{color:var(--fg3);font-size:11px;padding:4px 8px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #ctx-menu button{
@@ -299,7 +509,7 @@ body.row-dragging.row-drop-no,body.row-dragging.row-drop-no *{cursor:not-allowed
 #ctx-menu button:disabled{opacity:.45;cursor:default}
 #ctx-menu button .cm-ic{width:16px;text-align:center;flex-shrink:0}
 #ctx-menu button.danger{color:var(--danger)}
-#ctx-menu button.danger:hover{background:rgba(239,68,68,.12);color:var(--danger)}
+#ctx-menu button.danger:hover{background:var(--danger-soft);color:var(--danger)}
 #ctx-menu .cm-sep{height:1px;background:var(--border);margin:4px 2px}
 #ctx-menu .cm-msg{color:var(--fg);padding:6px 8px;line-height:1.4}
 #ctx-menu .cm-row{display:flex;gap:6px;padding:2px 4px 4px}
@@ -328,7 +538,7 @@ body.row-dragging.row-drop-no,body.row-dragging.row-drop-no *{cursor:not-allowed
 
 /* ── MODAL ───────────────────────────────────────────────── */
 #modal-overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.65);
+  position:fixed;inset:0;background:var(--overlay);
   display:flex;align-items:center;justify-content:center;
   z-index:500;
 }
@@ -337,7 +547,7 @@ body.row-dragging.row-drop-no,body.row-dragging.row-drop-no *{cursor:not-allowed
   background:var(--surface);border:1px solid var(--border);
   border-radius:12px;width:480px;max-width:calc(100vw - 24px);
   max-height:calc(100vh - 40px);display:flex;flex-direction:column;
-  box-shadow:0 24px 64px rgba(0,0,0,.65);overflow:hidden;
+  box-shadow:0 24px 64px var(--shadow-modal);overflow:hidden;
 }
 #modal-header{
   display:flex;align-items:center;padding:14px 18px;
@@ -370,7 +580,7 @@ body.row-dragging.row-drop-no,body.row-dragging.row-drop-no *{cursor:not-allowed
 .m-input{
   background:var(--bg);border:1px solid var(--border);border-radius:6px;
   color:var(--fg);font-family:inherit;font-size:13px;padding:7px 10px;
-  outline:none;transition:border-color .15s;color-scheme:dark;
+  outline:none;transition:border-color .15s;color-scheme:var(--scheme);
   width:100%;
 }
 .m-input:focus{border-color:var(--accent)}
@@ -402,7 +612,7 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
   padding:0;
 }
 .color-swatch:hover{transform:scale(1.2)}
-.color-swatch.active{border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.4);transform:scale(1.1)}
+.color-swatch.active{border-color:var(--swatch-ring);box-shadow:0 0 0 1px var(--swatch-ring-soft);transform:scale(1.1)}
 .m-parent-info{
   font-size:11px;color:var(--fg3);background:var(--bg);
   border-radius:5px;padding:5px 9px;border:1px solid var(--border2);
@@ -411,11 +621,11 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 
 /* Shared buttons */
 .btn-primary{
-  background:var(--accent);color:#0d1a00;border:none;border-radius:7px;
+  background:var(--accent);color:var(--on-accent);border:none;border-radius:7px;
   padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;
   font-family:inherit;transition:background .12s;
 }
-.btn-primary:hover{background:#96da1a}
+.btn-primary:hover{background:var(--accent-hover)}
 .btn-ghost{
   background:transparent;color:var(--fg2);border:1px solid var(--border);
   border-radius:7px;padding:7px 14px;font-size:13px;cursor:pointer;
@@ -423,16 +633,16 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 }
 .btn-ghost:hover{background:var(--surface2);color:var(--fg)}
 .btn-danger{
-  background:rgba(239,68,68,.12);color:var(--danger);
-  border:1px solid rgba(239,68,68,.25);border-radius:7px;
+  background:var(--danger-soft);color:var(--danger);
+  border:1px solid var(--danger-line);border-radius:7px;
   padding:7px 14px;font-size:13px;cursor:pointer;font-family:inherit;
   transition:background .12s,border-color .12s;
 }
-.btn-danger:hover{background:rgba(239,68,68,.22);border-color:rgba(239,68,68,.45)}
+.btn-danger:hover{background:var(--danger-soft3);border-color:var(--danger-line2)}
 
 /* ── TEAM MODAL ──────────────────────────────────────────── */
 #team-modal-overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.65);
+  position:fixed;inset:0;background:var(--overlay);
   display:flex;align-items:center;justify-content:center;z-index:500;
 }
 #team-modal-overlay[hidden]{display:none!important}
@@ -440,7 +650,7 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
   background:var(--surface);border:1px solid var(--border);
   border-radius:12px;width:540px;max-width:calc(100vw - 24px);
   max-height:calc(100vh - 40px);display:flex;flex-direction:column;
-  box-shadow:0 24px 64px rgba(0,0,0,.65);overflow:hidden;
+  box-shadow:0 24px 64px var(--shadow-modal);overflow:hidden;
 }
 .tm-header{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
 .tm-title{font-size:14px;font-weight:600;flex:1}
@@ -449,17 +659,17 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .tm-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 .tm-member-row{display:flex;align-items:center;gap:10px;padding:9px 18px;border-bottom:1px solid var(--border2);transition:background .08s}
 .tm-member-row:hover{background:var(--row-hover)}
-.tm-avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.tm-avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--on-color);flex-shrink:0}
 .tm-info{flex:1;min-width:0}
 .tm-name{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tm-role-txt{font-size:11px;color:var(--fg3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tm-org-tag{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;flex-shrink:0}
-.tm-org-tag.softbotic{background:rgba(59,130,246,.18);color:#93c5fd}
-.tm-org-tag.cliente{background:rgba(16,185,129,.15);color:#6ee7b7}
-.tm-org-tag.otro{background:rgba(148,163,184,.12);color:var(--fg3)}
+.tm-org-tag.softbotic{background:var(--tag-softbotic-bg);color:var(--tag-softbotic-fg)}
+.tm-org-tag.cliente{background:var(--tag-cliente-bg);color:var(--tag-cliente-fg)}
+.tm-org-tag.otro{background:var(--tag-otro-bg);color:var(--fg3)}
 .tm-icon-btn{width:26px;height:26px;border:none;background:transparent;color:var(--fg3);cursor:pointer;border-radius:5px;font-size:13px;display:flex;align-items:center;justify-content:center;transition:background .1s,color .1s}
 .tm-icon-btn:hover{background:var(--surface2);color:var(--fg)}
-.tm-icon-btn.danger:hover{background:rgba(239,68,68,.15);color:var(--danger)}
+.tm-icon-btn.danger:hover{background:var(--danger-soft2);color:var(--danger)}
 .tm-add-form{padding:14px 18px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;flex-shrink:0}
 .tm-add-form.hidden{display:none!important}
 .tm-2col{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -467,22 +677,22 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .tm-empty{padding:28px 18px;text-align:center;color:var(--fg3);font-size:12px;line-height:1.6}
 .tm-name-line{display:flex;align-items:center;gap:6px;min-width:0}
 .tm-name-line .tm-name{min-width:0}
-.tm-late-badge{flex-shrink:0;font-size:10px;font-weight:700;line-height:1;padding:3px 6px;border-radius:9px;background:var(--danger);color:#fff}
+.tm-late-badge{flex-shrink:0;font-size:10px;font-weight:700;line-height:1;padding:3px 6px;border-radius:9px;background:var(--danger);color:var(--on-color)}
 .tm-total{margin-left:auto;font-size:11px;color:var(--fg2);flex-shrink:0;white-space:nowrap}
 .tm-load{margin-top:5px}
-.tm-load-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:#cbd5e1}
+.tm-load-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--load-track)}
 .tm-load-bar span{display:block;height:100%}
-.tm-load-bar .seg-done{background:#22c55e}
-.tm-load-bar .seg-prog{background:#3b82f6}
-.tm-load-bar .seg-late{background:#ef4444}
-.tm-load-bar .seg-todo{background:#cbd5e1}
+.tm-load-bar .seg-done{background:var(--load-done)}
+.tm-load-bar .seg-prog{background:var(--load-prog)}
+.tm-load-bar .seg-late{background:var(--load-late)}
+.tm-load-bar .seg-todo{background:var(--load-track)}
 .tm-load-counts{margin-top:3px;font-size:10.5px;color:var(--fg3);line-height:1.4}
 .tm-load-none{margin-top:3px;font-size:11px;color:var(--fg3)}
 /* color palette for team */
 .tm-color-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .tm-swatch{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:transform .1s,border-color .1s;flex-shrink:0;padding:0}
 .tm-swatch:hover{transform:scale(1.2)}
-.tm-swatch.active{border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.4);transform:scale(1.1)}
+.tm-swatch.active{border-color:var(--swatch-ring);box-shadow:0 0 0 1px var(--swatch-ring-soft);transform:scale(1.1)}
 
 /* ── ASSIGNEE PICKER ─────────────────────────────────────── */
 #m-deps-wrap{max-height:148px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 0}
@@ -495,18 +705,18 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .assignee-row{display:flex;align-items:center;gap:8px;padding:5px 10px;cursor:pointer;transition:background .08s;user-select:none}
 .assignee-row:hover{background:var(--row-hover)}
 .assignee-row input[type=checkbox]{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
-.assignee-av{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0}
+.assignee-av{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:var(--on-color);flex-shrink:0}
 .assignee-name{font-size:12px;color:var(--fg2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .assignee-org{font-size:10px;color:var(--fg3);flex-shrink:0}
 
 /* ── AVATAR DOTS (left panel resp col) ──────────────────── */
 .tr-resp-dots{display:flex;align-items:center;width:86px;padding:0 6px;flex-shrink:0;overflow:hidden}
-.av-sm{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0;border:1.5px solid var(--surface);margin-left:-4px}
+.av-sm{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:var(--on-color);flex-shrink:0;border:1.5px solid var(--surface);margin-left:-4px}
 .av-sm:first-child{margin-left:0}
 
 /* ── PHASE MODAL ─────────────────────────────────────────── */
 #phase-modal-overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.65);
+  position:fixed;inset:0;background:var(--overlay);
   display:flex;align-items:center;justify-content:center;z-index:500;
 }
 #phase-modal-overlay[hidden]{display:none!important}
@@ -545,10 +755,10 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
   width:22px;height:22px;border-radius:4px;cursor:pointer;
   border:2px solid transparent;transition:border-color .12s;flex-shrink:0;
 }
-.pm-color-swatch.active{border-color:#fff}
+.pm-color-swatch.active{border-color:var(--swatch-ring)}
 /* ── SPRINT MODAL ────────────────────────────────────────── */
 #sprint-modal-overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.65);
+  position:fixed;inset:0;background:var(--overlay);
   display:flex;align-items:center;justify-content:center;z-index:500;
 }
 #sprint-modal-overlay[hidden]{display:none!important}
@@ -562,7 +772,7 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .sm-body{flex:1;overflow-y:auto;padding:10px 16px 8px}
 .sm-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border2)}
 .sm-row:last-child{border-bottom:none}
-.sm-num{font-size:11px;font-weight:600;color:var(--accent);background:rgba(132,204,22,.12);
+.sm-num{font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);
   border-radius:4px;padding:2px 6px;flex-shrink:0;min-width:30px;text-align:center}
 .sm-info{flex:1;min-width:0}
 .sm-name{font-size:12px;font-weight:500;color:var(--fg)}
@@ -575,18 +785,18 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .sm-2col{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 .sm-3col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
 .sm-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;
-  padding:5px 8px;font-size:12px;color:var(--fg);outline:none;font-family:inherit;color-scheme:dark}
+  padding:5px 8px;font-size:12px;color:var(--fg);outline:none;font-family:inherit;color-scheme:var(--scheme)}
 .sm-input:focus{border-color:var(--accent)}
 .sm-input.error{border-color:var(--danger)}
 .sm-hint{font-size:11px;color:var(--fg3);margin-bottom:8px;line-height:1.4}
 .sm-footer{display:flex;align-items:center;flex-wrap:wrap;padding:10px 16px 14px;border-top:1px solid var(--border2);gap:8px}
 .sm-col-toggle{font-size:12px;padding:0 0 8px;width:100%}
 /* ── Holiday modal ── */
-.hm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;
+.hm-overlay{position:fixed;inset:0;background:var(--overlay-soft);z-index:200;
   display:none;align-items:center;justify-content:center}
 .hm-overlay.open{display:flex}
 .hm-panel{background:var(--bg);border:1px solid var(--border);border-radius:10px;
-  width:420px;max-width:96vw;display:flex;flex-direction:column;box-shadow:0 12px 32px rgba(0,0,0,.45)}
+  width:420px;max-width:96vw;display:flex;flex-direction:column;box-shadow:0 12px 32px var(--shadow-md)}
 .hm-header{display:flex;align-items:center;padding:14px 16px 12px;
   border-bottom:1px solid var(--border2);gap:8px}
 .hm-title{flex:1;font-weight:600;font-size:14px}
@@ -594,12 +804,12 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .hm-item{display:flex;align-items:center;gap:8px;padding:6px 4px;
   border-bottom:1px solid var(--border2)}
 .hm-item:last-child{border-bottom:none}
-.hm-dot{width:8px;height:8px;border-radius:50%;background:#ef4444;flex-shrink:0}
+.hm-dot{width:8px;height:8px;border-radius:50%;background:var(--danger);flex-shrink:0}
 .hm-date{font-size:11px;color:var(--fg2);width:82px;flex-shrink:0}
 .hm-name{flex:1;font-size:13px}
 .hm-del{background:none;border:none;color:var(--fg2);cursor:pointer;
   font-size:15px;padding:2px 4px;border-radius:4px;line-height:1}
-.hm-del:hover{color:#ef4444;background:rgba(239,68,68,.12)}
+.hm-del:hover{color:var(--danger);background:var(--danger-soft)}
 .hm-add-form{padding:10px 12px;border-top:1px solid var(--border2)}
 .hm-add-row{display:flex;gap:8px;align-items:flex-end}
 .hm-field{display:flex;flex-direction:column;gap:4px}
@@ -620,14 +830,14 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .im-item:last-child{border-bottom:none}
 .im-item.resolved .im-title{color:var(--fg2);text-decoration:line-through}
 .im-sev{flex-shrink:0;width:58px;text-align:center;padding:2px 0;border-radius:4px;
-  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:#fff;margin-top:1px}
+  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:var(--on-color);margin-top:1px}
 .im-body{flex:1;min-width:0}
 .im-title{font-size:13px;color:var(--fg);overflow-wrap:anywhere}
 .im-desc{font-size:11.5px;color:var(--fg2);margin-top:2px;white-space:pre-wrap;overflow-wrap:anywhere}
 .im-meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--fg3);margin-top:4px}
 .im-status{color:var(--fg2)}
-.im-status.st-abierto{color:#f87171}
-.im-status.st-en_seguimiento{color:#fbbf24}
+.im-status.st-abierto{color:var(--st-open)}
+.im-status.st-en_seguimiento{color:var(--st-follow)}
 .im-status.st-resuelto{color:var(--accent)}
 .im-actions{display:flex;gap:4px;flex-shrink:0;align-items:center}
 .im-resolve{padding:3px 8px;font-size:11px}
@@ -636,13 +846,13 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .im-span2{grid-column:span 2}
 .im-grid textarea{resize:vertical;font-family:inherit}
 /* ⚠ next to a task name in the list when it has unresolved incidents */
-.tr-incident{color:#ea580c;font-size:11px;margin-right:4px;flex-shrink:0;cursor:help}
+.tr-incident{color:var(--warn);font-size:11px;margin-right:4px;flex-shrink:0;cursor:help}
 /* ── Client modal ── */
-.cl-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;
+.cl-overlay{position:fixed;inset:0;background:var(--overlay-soft);z-index:200;
   display:none;align-items:center;justify-content:center}
 .cl-overlay.open{display:flex}
 .cl-panel{background:var(--bg);border:1px solid var(--border);border-radius:10px;
-  width:380px;max-width:96vw;display:flex;flex-direction:column;box-shadow:0 12px 32px rgba(0,0,0,.45)}
+  width:380px;max-width:96vw;display:flex;flex-direction:column;box-shadow:0 12px 32px var(--shadow-md)}
 .cl-header{display:flex;align-items:center;padding:14px 16px 12px;
   border-bottom:1px solid var(--border2);gap:8px}
 .cl-title{flex:1;font-weight:600;font-size:14px}
@@ -663,16 +873,16 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .cl-contacts{display:flex;flex-direction:column;gap:8px}
 .cl-contact{border:1px solid var(--border2);border-radius:7px;padding:8px;display:grid;
   grid-template-columns:1fr 1fr auto;gap:6px;align-items:center;background:var(--surface)}
-.cl-contact.primary{border-color:rgba(132,204,22,.5)}
+.cl-contact.primary{border-color:var(--accent-line2)}
 .cl-contact .cl-input{padding:5px 8px;font-size:12.5px;min-width:0}
 .cl-contact-tools{grid-row:span 2;display:flex;flex-direction:column;gap:4px;align-items:stretch}
 .cl-contact-tools button{padding:3px 8px;font-size:11px;white-space:nowrap}
-.cl-primary-btn.on{color:var(--accent);border-color:rgba(132,204,22,.5)}
+.cl-primary-btn.on{color:var(--accent);border-color:var(--accent-line2)}
 .cl-empty{font-size:12px;color:var(--fg3);padding:4px 0}
 .cl-notes{resize:vertical;min-height:70px;font-family:inherit}
 .cl-appr-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:none}
-.appr-pendiente{background:#fbbf24}.appr-observaciones{background:#fb923c}
-.appr-aprobado{background:#84cc16}.appr-rechazado{background:#ef4444}
+.appr-pendiente{background:var(--appr-pendiente)}.appr-observaciones{background:var(--appr-observaciones)}
+.appr-aprobado{background:var(--appr-aprobado)}.appr-rechazado{background:var(--appr-rechazado)}
 @media (max-width:520px){.cl-contact{grid-template-columns:1fr}.cl-contact-tools{grid-row:auto;flex-direction:row;order:5}.cl-row{flex-direction:column}}
 /* ── Export / Import modal ── */
 .ex-panel{width:420px}
@@ -688,19 +898,19 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .ex-hint{font-size:11px;color:var(--fg3);line-height:1.5}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:600;
   background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 16px;
-  font-size:12px;color:var(--fg);box-shadow:0 8px 24px rgba(0,0,0,.5);display:none;max-width:90vw}
+  font-size:12px;color:var(--fg);box-shadow:0 8px 24px var(--shadow-lg);display:none;max-width:90vw}
 #toast.show{display:block}
-#toast.error{border-color:var(--danger);color:#fca5a5}
+#toast.error{border-color:var(--danger);color:var(--danger-fg)}
 /* ── Client badge in toolbar ── */
 #client-badge{
   display:none;align-items:center;gap:4px;padding:1px 7px 1px 6px;margin-left:4px;
-  border-radius:10px;background:rgba(132,204,22,.15);border:1px solid rgba(132,204,22,.35);
+  border-radius:10px;background:var(--accent-soft2);border:1px solid var(--accent-line);
   font-size:10.5px;line-height:14px;color:var(--accent);cursor:pointer;white-space:nowrap;max-width:calc(100% - 4px);
   overflow:hidden;text-overflow:ellipsis
 }
 #client-badge svg{flex-shrink:0}
 #client-badge-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
-#client-badge:hover{background:rgba(132,204,22,.25)}
+#client-badge:hover{background:var(--accent-soft3)}
 /* ── Autosave: last-save indicator in the toolbar + restore banner ── */
 #autosave-status{display:none;align-items:center;gap:4px;font-size:10.5px;color:var(--fg3);
   white-space:nowrap;padding:0 4px;cursor:default}
@@ -709,7 +919,7 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 #restore-banner{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:610;
   display:none;align-items:center;gap:12px;flex-wrap:wrap;max-width:calc(100vw - 32px);
   background:var(--surface2);border:1px solid var(--accent);border-radius:8px;padding:10px 12px 10px 16px;
-  font-size:12px;color:var(--fg);box-shadow:0 8px 24px rgba(0,0,0,.5)}
+  font-size:12px;color:var(--fg);box-shadow:0 8px 24px var(--shadow-lg)}
 #restore-banner.show{display:flex}
 #restore-banner .rb-actions{display:flex;gap:8px;margin-left:auto}
 
@@ -721,8 +931,8 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 <div id="toolbar">
   <div id="logo">
     <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-      <rect width="26" height="26" rx="6" fill="#84cc16"/>
-      <path d="M6 13L11 18L20 8" stroke="#0d1a00" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect width="26" height="26" rx="6" style="fill:var(--accent)"/>
+      <path d="M6 13L11 18L20 8" style="stroke:var(--on-accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     <div id="logo-text">Crono<span>grami</span></div>
   </div>
@@ -810,7 +1020,7 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
     </button>
     <div class="tb-menu" id="calendar-menu" hidden>
       <button class="tb-menu-item" onclick="tbMenuPick(openHolidayModal)">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 2v2M11 2v2M2 7h12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11" r="1.5" fill="#ef4444"/></svg>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 2v2M11 2v2M2 7h12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11" r="1.5" style="fill:var(--danger)"/></svg>
         Feriados
       </button>
       <button class="tb-menu-item" onclick="tbMenuPick(openIncidentModal)">
@@ -827,6 +1037,8 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
     <div id="view-menu" hidden>
       <div class="vm-title">Visualización</div>
       <div id="view-menu-items"></div>
+      <div class="vm-sep"></div>
+      <button id="theme-toggle" onclick="toggleTheme()"></button>
     </div>
   </div>
 
@@ -888,7 +1100,7 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
     <div id="gantt-wrap">
       <canvas id="gantt-canvas"></canvas>
       <div id="empty-state">
-        <svg width="64" height="64" viewBox="0 0 64 64" fill="none"><rect x="8" y="12" width="48" height="40" rx="4" stroke="#84cc16" stroke-width="2"/><path d="M20 24h24M20 32h16M20 40h20" stroke="#84cc16" stroke-width="2" stroke-linecap="round"/></svg>
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none"><rect x="8" y="12" width="48" height="40" rx="4" style="stroke:var(--accent)" stroke-width="2"/><path d="M20 24h24M20 32h16M20 40h20" style="stroke:var(--accent)" stroke-width="2" stroke-linecap="round"/></svg>
         <p>Abrí un archivo <strong>.cronogrami</strong><br>o creá una nueva tarea para empezar</p>
       </div>
     </div>
@@ -1155,7 +1367,7 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 <div class="hm-overlay" id="holiday-modal-overlay">
   <div class="hm-panel">
     <div class="hm-header">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1.5" stroke="#ef4444" stroke-width="1.5"/><path d="M5 2v2M11 2v2M2 7h12" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11" r="1.5" fill="#ef4444"/></svg>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1.5" style="stroke:var(--danger)" stroke-width="1.5"/><path d="M5 2v2M11 2v2M2 7h12" style="stroke:var(--danger)" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11" r="1.5" style="fill:var(--danger)"/></svg>
       <div class="hm-title">Feriados</div>
       <button class="btn-ghost" onclick="closeHolidayModal()" style="padding:2px 8px">✕</button>
     </div>
@@ -1188,7 +1400,7 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 <div class="hm-overlay" id="incident-modal-overlay">
   <div class="hm-panel im-panel">
     <div class="hm-header">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2.2L14.5 13.5h-13L8 2.2z" stroke="#ea580c" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.5v3" stroke="#ea580c" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".8" fill="#ea580c"/></svg>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2.2L14.5 13.5h-13L8 2.2z" style="stroke:var(--warn)" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.5v3" style="stroke:var(--warn)" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".8" style="fill:var(--warn)"/></svg>
       <div class="hm-title">Incidentes</div>
       <div class="im-filter" id="im-filter">
         <button data-f="all" onclick="setIncidentFilter('all')">Todos</button>
@@ -1397,10 +1609,21 @@ function toggleViewMenu(force) {
     document.getElementById('view-menu-items').innerHTML = VIEW_OPTIONS.map(o =>
       `<label><input type="checkbox" data-key="${o.key}"${state.viewOpts[o.key] ? ' checked' : ''}
         onchange="setViewOpt(this.dataset.key, this.checked)">${esc(o.label)}</label>`).join('');
+    // Offers the other theme: 🌙 Modo oscuro while light, ☀️ Modo claro while dark
+    document.getElementById('theme-toggle').innerHTML = document.documentElement.dataset.theme === 'dark'
+      ? '<span class="vm-ic">☀️</span>Modo claro' : '<span class="vm-ic">🌙</span>Modo oscuro';
   }
   if (open) closeTbMenus();
   menu.hidden = !open;
   document.getElementById('view-menu-btn').setAttribute('aria-expanded', String(open));
+}
+// Light/dark theme (applied before first paint by the script in <head>; THEME_KEY is defined there)
+function toggleTheme() {
+  const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+  toggleViewMenu(false);
+  renderRuler(); renderGantt(); // canvases don't follow CSS variables on their own
 }
 document.addEventListener('mousedown', e => {
   if (!document.getElementById('view-menu').hidden && !e.target.closest('#view-menu-wrap')) toggleViewMenu(false);
@@ -1947,6 +2170,17 @@ function hasTasksToExport() {
 
 // ─── PNG ─────────────────────────────────────────────────
 const EXPORT_TITLE_H = 40;
+// PNG and PDF always come out in the light theme (readable printed and on white pages),
+// whatever theme is on screen. Switches the theme only while fn draws, synchronously, so
+// the screen never paints it, then redraws the on-screen canvases in the screen theme.
+const EXPORT_THEME = 'light';
+function withExportTheme(fn) {
+  const root = document.documentElement, screenTheme = root.dataset.theme;
+  if (screenTheme === EXPORT_THEME) return fn();
+  root.dataset.theme = EXPORT_THEME;
+  try { return fn(); }
+  finally { root.dataset.theme = screenTheme; renderRuler(); renderGantt(); }
+}
 // Title bar + ruler + gantt (only the rows in use) combined in one offscreen canvas
 function buildExportCanvas() {
   rebuildAndRender(false); // make sure both canvases reflect the current state
@@ -1956,9 +2190,9 @@ function buildExportCanvas() {
   const gh = Math.min(gantt.height, Math.max(state.flat.length, 1) * ROW_H);
   const out = document.createElement('canvas');
   out.width = w; out.height = EXPORT_TITLE_H + ruler.height + gh;
-  const ctx = out.getContext('2d');
-  ctx.fillStyle = '#0f1a2d'; ctx.fillRect(0, 0, w, EXPORT_TITLE_H);
-  ctx.fillStyle = '#ffffff'; ctx.font = '600 16px Inter,system-ui';
+  const ctx = out.getContext('2d'), C = canvasColors();
+  ctx.fillStyle = C.titleBg; ctx.fillRect(0, 0, w, EXPORT_TITLE_H);
+  ctx.fillStyle = C.titleFg; ctx.font = '600 16px Inter,system-ui';
   ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   ctx.fillText(state.project?.project_name || 'Proyecto', 12, EXPORT_TITLE_H / 2);
   ctx.drawImage(ruler, 0, EXPORT_TITLE_H);
@@ -1969,7 +2203,7 @@ function buildExportCanvas() {
 function exportPNG() {
   if (!hasTasksToExport()) return;
   return withLoading('ex-btn-png', async () => {
-    const canvas = buildExportCanvas();
+    const canvas = withExportTheme(buildExportCanvas);
     await triggerDownload(exportBaseName() + '.png', await canvasToBlob(canvas));
   });
 }
@@ -2003,84 +2237,88 @@ function exportPDF() {
   if (!hasTasksToExport()) return;
   if (!window.jspdf) { showToast('No se pudo cargar la librería de PDF (jsPDF).', true); return; }
   return withLoading('ex-btn-pdf', async () => {
-    rebuildAndRender(false);
-    const flat = state.flat;
-    const chartW = chartWidth(), rulerH = rulerHeight();
-    const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
-    const pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
-    const M = 10, HEADER = 10, NAME_W = PDF_NAME_COL_W;
-    const chartX = M + NAME_W, top = M + HEADER;
-    const availW = pageW - 2 * M - NAME_W, availH = pageH - 2 * M - HEADER;
-    const fitScale = Math.min(availW / chartW, PDF_PAGE_SCALE);
-    const scale = fitScale >= PDF_MIN_FIT_SCALE ? fitScale : PDF_PAGE_SCALE;
-    const colW = Math.max(1, Math.floor(availW / scale));   // chart px per page, horizontally
-    // Pages hold whole rows only, so no bar is ever cut in half between pages
-    const rowsPerPage = Math.max(1, Math.floor((availH / scale - rulerH) / ROW_H));
-    const cols = Math.max(1, Math.ceil(chartW / colW));
-    const rowPages = Math.max(1, Math.ceil(flat.length / rowsPerPage));
-    const pages = cols * rowPages;
-    const rowMM = ROW_H * scale, rulerMM = rulerH * scale;
-    const nameFont = Math.min(9, rowMM * 72 / 25.4 * 0.45); // pt
-    const name = state.project?.project_name || 'Proyecto';
-    const generated = 'Generado: ' + new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const tile = document.createElement('canvas');
-    const k = PDF_PIXEL_RATIO;
+    const pdf = withExportTheme(() => {
+      rebuildAndRender(false);
+      const flat = state.flat;
+      const chartW = chartWidth(), rulerH = rulerHeight();
+      const rgb = name => pdfHexRGB(themeVar(name));
+      const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
+      const pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
+      const M = 10, HEADER = 10, NAME_W = PDF_NAME_COL_W;
+      const chartX = M + NAME_W, top = M + HEADER;
+      const availW = pageW - 2 * M - NAME_W, availH = pageH - 2 * M - HEADER;
+      const fitScale = Math.min(availW / chartW, PDF_PAGE_SCALE);
+      const scale = fitScale >= PDF_MIN_FIT_SCALE ? fitScale : PDF_PAGE_SCALE;
+      const colW = Math.max(1, Math.floor(availW / scale));   // chart px per page, horizontally
+      // Pages hold whole rows only, so no bar is ever cut in half between pages
+      const rowsPerPage = Math.max(1, Math.floor((availH / scale - rulerH) / ROW_H));
+      const cols = Math.max(1, Math.ceil(chartW / colW));
+      const rowPages = Math.max(1, Math.ceil(flat.length / rowsPerPage));
+      const pages = cols * rowPages;
+      const rowMM = ROW_H * scale, rulerMM = rulerH * scale;
+      const nameFont = Math.min(9, rowMM * 72 / 25.4 * 0.45); // pt
+      const name = state.project?.project_name || 'Proyecto';
+      const generated = 'Generado: ' + new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const tile = document.createElement('canvas');
+      const k = PDF_PIXEL_RATIO;
 
-    let page = 0;
-    for (let r = 0; r < rowPages; r++) {
-      const first = r * rowsPerPage;
-      const rows = flat.slice(first, first + rowsPerPage);
-      for (let c = 0; c < cols; c++) {
-        page++;
-        if (page > 1) pdf.addPage();
-        pdf.setTextColor(20, 20, 20); pdf.setFont('helvetica', 'normal');
-        const pageLabel = `Página ${page}/${pages}`;
-        if (page === 1) {
-          pdf.setFontSize(14); pdf.text(name, M, M + 5);
-          pdf.setFontSize(9);
-          pdf.text(generated + (pages > 1 ? '  ·  ' + pageLabel : ''), pageW - M, M + 5, { align: 'right' });
-        } else {
-          pdf.setFontSize(9);
-          pdf.text(pdfFitText(pdf, name, pageW / 2), M, M + 5);
-          pdf.text(pageLabel, pageW - M, M + 5, { align: 'right' });
-        }
-
-        // Task name column: same colors as the chart rows next to it
-        pdf.setFillColor(15, 26, 45); pdf.rect(M, top, NAME_W, rulerMM, 'F');
-        pdf.setFontSize(nameFont); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(148, 163, 184);
-        pdf.text('Tarea', M + 2, top + rulerMM - rowMM / 2, { baseline: 'middle' });
-        rows.forEach(({ task, depth }, i) => {
-          const y = top + rulerMM + i * rowMM, cy = y + rowMM / 2;
-          if ((first + i) % 2 === 0) pdf.setFillColor(22, 31, 47); else pdf.setFillColor(17, 24, 39);
-          pdf.rect(M, y, NAME_W, rowMM, 'F');
-          pdf.setFont('helvetica', 'normal'); pdf.setTextColor(100, 116, 139);
-          pdf.text(String(task.taskNum ?? ''), M + 7, cy, { align: 'right', baseline: 'middle' });
-          const mx = M + 10 + Math.min(depth, 6) * 3, d = Math.min(1.3, rowMM / 5);
-          pdf.setFillColor(...pdfHexRGB(task.color));
-          if (task.isMilestone) {
-            pdf.triangle(mx - d, cy, mx, cy - d, mx + d, cy, 'F');
-            pdf.triangle(mx - d, cy, mx, cy + d, mx + d, cy, 'F');
+      let page = 0;
+      for (let r = 0; r < rowPages; r++) {
+        const first = r * rowsPerPage;
+        const rows = flat.slice(first, first + rowsPerPage);
+        for (let c = 0; c < cols; c++) {
+          page++;
+          if (page > 1) pdf.addPage();
+          pdf.setTextColor(...rgb('--pdf-text')); pdf.setFont('helvetica', 'normal');
+          const pageLabel = `Página ${page}/${pages}`;
+          if (page === 1) {
+            pdf.setFontSize(14); pdf.text(name, M, M + 5);
+            pdf.setFontSize(9);
+            pdf.text(generated + (pages > 1 ? '  ·  ' + pageLabel : ''), pageW - M, M + 5, { align: 'right' });
           } else {
-            pdf.rect(mx - d * 0.8, cy - d * 0.8, d * 1.6, d * 1.6, 'F');
+            pdf.setFontSize(9);
+            pdf.text(pdfFitText(pdf, name, pageW / 2), M, M + 5);
+            pdf.text(pageLabel, pageW - M, M + 5, { align: 'right' });
           }
-          pdf.setFont('helvetica', task.parentId == null ? 'bold' : 'normal');
-          pdf.setTextColor(226, 232, 240);
-          const tx = mx + d + 1.5;
-          pdf.text(pdfFitText(pdf, task.name || '', M + NAME_W - 1.5 - tx), tx, cy, { baseline: 'middle' });
-        });
 
-        // Chart: ruler slice on top of every page, then this page's rows
-        const x0 = c * colW, w = Math.min(colW, chartW - x0);
-        renderRuler({ canvas: tile, k, x0, w });
-        pdf.addImage(tile.toDataURL('image/png'), 'PNG', chartX, top, w * scale, rulerMM, undefined, 'FAST');
-        if (rows.length) {
-          renderGantt({ canvas: tile, k, x0, y0: first * ROW_H, w, h: rows.length * ROW_H });
-          pdf.addImage(tile.toDataURL('image/png'), 'PNG', chartX, top + rulerMM, w * scale, rows.length * rowMM, undefined, 'FAST');
+          // Task name column: same colors as the chart rows next to it
+          pdf.setFillColor(...rgb('--pdf-head-bg')); pdf.rect(M, top, NAME_W, rulerMM, 'F');
+          pdf.setFontSize(nameFont); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...rgb('--pdf-head-fg'));
+          pdf.text('Tarea', M + 2, top + rulerMM - rowMM / 2, { baseline: 'middle' });
+          rows.forEach(({ task, depth }, i) => {
+            const y = top + rulerMM + i * rowMM, cy = y + rowMM / 2;
+            pdf.setFillColor(...rgb((first + i) % 2 === 0 ? '--pdf-row-even' : '--pdf-row-odd'));
+            pdf.rect(M, y, NAME_W, rowMM, 'F');
+            pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...rgb('--pdf-num'));
+            pdf.text(String(task.taskNum ?? ''), M + 7, cy, { align: 'right', baseline: 'middle' });
+            const mx = M + 10 + Math.min(depth, 6) * 3, d = Math.min(1.3, rowMM / 5);
+            pdf.setFillColor(...pdfHexRGB(task.color));
+            if (task.isMilestone) {
+              pdf.triangle(mx - d, cy, mx, cy - d, mx + d, cy, 'F');
+              pdf.triangle(mx - d, cy, mx, cy + d, mx + d, cy, 'F');
+            } else {
+              pdf.rect(mx - d * 0.8, cy - d * 0.8, d * 1.6, d * 1.6, 'F');
+            }
+            pdf.setFont('helvetica', task.parentId == null ? 'bold' : 'normal');
+            pdf.setTextColor(...rgb('--pdf-name'));
+            const tx = mx + d + 1.5;
+            pdf.text(pdfFitText(pdf, task.name || '', M + NAME_W - 1.5 - tx), tx, cy, { baseline: 'middle' });
+          });
+
+          // Chart: ruler slice on top of every page, then this page's rows
+          const x0 = c * colW, w = Math.min(colW, chartW - x0);
+          renderRuler({ canvas: tile, k, x0, w });
+          pdf.addImage(tile.toDataURL('image/png'), 'PNG', chartX, top, w * scale, rulerMM, undefined, 'FAST');
+          if (rows.length) {
+            renderGantt({ canvas: tile, k, x0, y0: first * ROW_H, w, h: rows.length * ROW_H });
+            pdf.addImage(tile.toDataURL('image/png'), 'PNG', chartX, top + rulerMM, w * scale, rows.length * rowMM, undefined, 'FAST');
+          }
+          pdf.setDrawColor(...rgb('--pdf-line')); pdf.setLineWidth(0.3);
+          pdf.line(chartX, top, chartX, top + rulerMM + rows.length * rowMM);
         }
-        pdf.setDrawColor(51, 65, 85); pdf.setLineWidth(0.3);
-        pdf.line(chartX, top, chartX, top + rulerMM + rows.length * rowMM);
       }
-    }
+      return pdf;
+    });
     await triggerDownload(exportBaseName() + '.pdf', pdf.output('blob'));
   });
 }
@@ -3251,7 +3489,7 @@ function renderLeft() {
       ? `<span class="tr-incident" title="${nInc} ${nInc === 1 ? 'incidente sin resolver' : 'incidentes sin resolver'}">⚠</span>`
       : '';
     const glIcon = task.isGoLive
-      ? `<span class="tr-milestone-icon" style="color:#f59e0b" title="Go Live">🏁</span>`
+      ? `<span class="tr-milestone-icon" style="color:var(--milestone)" title="Go Live">🏁</span>`
       : '';
     html += `<div class="tr${sel}" data-id="${task.id}" style="position:relative">
       <div class="tr-num">${task.taskNum ?? ''}</div>
@@ -3290,6 +3528,7 @@ function highlightMatch(text, q) {
 // tile (PDF export only): { canvas, k, x0, w } draws the slice x0..x0+w of the ruler into
 // tile.canvas at k device px per px, leaving the on-screen ruler untouched
 function renderRuler(tile) {
+  const C = canvasColors();
   const canvas = tile ? tile.canvas : document.getElementById('ruler-canvas');
   const w = chartWidth();
   const H = rulerHeight();
@@ -3305,7 +3544,7 @@ function renderRuler(tile) {
     document.getElementById('col-header').style.height = H + 'px';
   }
   ctx.clearRect(0, 0, w, H);
-  ctx.fillStyle = '#0f1a2d';
+  ctx.fillStyle = C.ruler;
   ctx.fillRect(0, 0, w, H);
   if (state.view === 'day') {
     drawMonthLabels(ctx, w, 0, 26); drawDayLabels(ctx, w, 26, 26);
@@ -3322,7 +3561,7 @@ function renderRuler(tile) {
       const hx = dateToX(hd) + state.pxPerDay / 2;
       if (hx < 0 || hx > w) return;
       const my = rulerLabelH - 7;
-      ctx.fillStyle = '#ef4444';
+      ctx.fillStyle = C.danger;
       ctx.beginPath();
       ctx.moveTo(hx, my - 4); ctx.lineTo(hx + 4, my);
       ctx.lineTo(hx, my + 4); ctx.lineTo(hx - 4, my);
@@ -3332,16 +3571,16 @@ function renderRuler(tile) {
   // ── Phase band strip (bottom 24px of ruler) ──────────────
   const stripY = HEADER_H - PHASE_H;
   // Strip background
-  ctx.fillStyle = 'rgba(0,0,0,.25)';
+  ctx.fillStyle = C.strip;
   ctx.fillRect(0, stripY, w, PHASE_H);
-  ctx.strokeStyle = 'rgba(255,255,255,.06)';
+  ctx.strokeStyle = C.stripLine;
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, stripY+.5); ctx.lineTo(w, stripY+.5); ctx.stroke();
 
   const phases = getPhases();
   if (phases.length === 0) {
     // hint text when no phases configured
-    ctx.fillStyle = '#2d3f52';
+    ctx.fillStyle = C.hint;
     ctx.font = '400 10px Inter,system-ui';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
@@ -3372,7 +3611,7 @@ function renderRuler(tile) {
       if (bw > 24) {
         ctx.save();
         ctx.beginPath(); ctx.rect(bx+5, stripY+3, bw-10, PHASE_H-3); ctx.clip();
-        ctx.fillStyle = '#e2e8f0';
+        ctx.fillStyle = C.phaseText;
         ctx.font = '500 10px Inter,system-ui';
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
@@ -3386,9 +3625,9 @@ function renderRuler(tile) {
   const sprints = getSprints();
   if (sprints.length) {
     const sy = HEADER_H;
-    ctx.fillStyle = 'rgba(132,204,22,.08)';
+    ctx.fillStyle = C.sprintBand;
     ctx.fillRect(0, sy, w, SPRINT_H);
-    ctx.fillStyle = 'rgba(255,255,255,.06)';
+    ctx.fillStyle = C.stripLine;
     ctx.fillRect(0, sy, w, 1);
     ctx.font = '500 9px Inter,system-ui';
     ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
@@ -3397,7 +3636,7 @@ function renderRuler(tile) {
       if (!s || !e) return;
       const x = dateToX(s), x2 = dateToX(e) + state.pxPerDay;
       if (x2 <= 0 || x >= w) return;
-      ctx.fillStyle = 'rgba(132,204,22,.5)';
+      ctx.fillStyle = C.sprintEdge;
       ctx.fillRect(Math.round(x), sy, 1, SPRINT_H);        // left edge
       ctx.fillRect(Math.round(x2) - 1, sy, 1, SPRINT_H);   // right edge (end of last day)
       // Custom name if it fits, else "S<n>", else nothing (never cut text)
@@ -3405,7 +3644,7 @@ function renderRuler(tile) {
       const label = [sp.name && sp.name.trim(), 'S' + sp.number]
         .find(t => t && ctx.measureText(t).width + 8 <= bw);
       if (label) {
-        ctx.fillStyle = '#94a3b8';
+        ctx.fillStyle = C.label;
         ctx.fillText(label, bx + bw / 2, sy + SPRINT_H / 2 + 0.5);
       }
     });
@@ -3414,32 +3653,34 @@ function renderRuler(tile) {
   // Today marker (drawn last so it sits on top)
   const tx = dateToX(new Date());
   if (tx >= 0 && tx <= w) {
-    ctx.fillStyle = 'rgba(239,68,68,.85)';
+    ctx.fillStyle = C.todayRuler;
     ctx.fillRect(tx-1, 0, 2, H);
-    ctx.fillStyle = '#ef4444';
+    ctx.fillStyle = C.danger;
     ctx.beginPath(); ctx.arc(tx, stripY - 4, 4, 0, Math.PI*2); ctx.fill();
   }
 }
 
 function drawMonthLabels(ctx, w, y, h) {
+  const C = canvasColors();
   ctx.font = '500 11px Inter,system-ui'; ctx.textBaseline = 'middle';
   let cur = new Date(state.chartStart); cur.setDate(1);
   if (cur < state.chartStart) cur.setMonth(cur.getMonth()+1);
-  ctx.strokeStyle = '#2d3f52'; ctx.lineWidth = 1;
+  ctx.strokeStyle = C.line; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, y+h-0.5); ctx.lineTo(w, y+h-0.5); ctx.stroke();
   while (cur <= state.chartEnd) {
     const x = dateToX(cur);
     const nextMonth = new Date(cur.getFullYear(), cur.getMonth()+1, 1);
     const x2 = Math.min(dateToX(nextMonth), w);
     const label = MONTHS_ES[cur.getMonth()] + ' ' + cur.getFullYear();
-    ctx.fillStyle = '#2d3f52'; ctx.fillRect(x, y, 1, h);
-    ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'center';
+    ctx.fillStyle = C.line; ctx.fillRect(x, y, 1, h);
+    ctx.fillStyle = C.label; ctx.textAlign = 'center';
     ctx.fillText(label, x+(x2-x)/2, y+h/2);
     cur = nextMonth;
   }
 }
 
 function drawDayLabels(ctx, w, y, h) {
+  const C = canvasColors();
   ctx.font = '400 10px Inter,system-ui'; ctx.textBaseline = 'middle';
   const days = diffDays(state.chartStart, state.chartEnd);
   for (let i = 0; i <= days; i++) {
@@ -3447,10 +3688,10 @@ function drawDayLabels(ctx, w, y, h) {
     const x = i * state.pxPerDay;
     const dow = d.getDay();
     const isWeekend = dow===0||dow===6;
-    if (isWeekend) { ctx.fillStyle='rgba(0,0,0,.2)'; ctx.fillRect(x, y, state.pxPerDay, h); }
-    ctx.fillStyle = '#2d3f52'; ctx.fillRect(x, y, 1, h);
+    if (isWeekend) { ctx.fillStyle=C.weekendRuler; ctx.fillRect(x, y, state.pxPerDay, h); }
+    ctx.fillStyle = C.line; ctx.fillRect(x, y, 1, h);
     if (state.pxPerDay >= 16) {
-      ctx.fillStyle = isWeekend ? '#4b5563' : '#64748b';
+      ctx.fillStyle = isWeekend ? C.labelWeekend : C.label2;
       ctx.textAlign = 'center';
       ctx.fillText(d.getDate(), x+state.pxPerDay/2, y+h/2);
     }
@@ -3458,6 +3699,7 @@ function drawDayLabels(ctx, w, y, h) {
 }
 
 function drawWeekLabels(ctx, w, y, h) {
+  const C = canvasColors();
   ctx.font = '400 10px Inter,system-ui'; ctx.textBaseline = 'middle';
   let cur = new Date(state.chartStart);
   const startDow = cur.getDay();
@@ -3466,8 +3708,8 @@ function drawWeekLabels(ctx, w, y, h) {
   while (cur <= state.chartEnd) {
     const x = dateToX(cur);
     if (x >= 0) {
-      ctx.fillStyle = '#2d3f52'; ctx.fillRect(x, y, 1, h);
-      ctx.fillStyle = '#64748b'; ctx.textAlign = 'left';
+      ctx.fillStyle = C.line; ctx.fillRect(x, y, 1, h);
+      ctx.fillStyle = C.label2; ctx.textAlign = 'left';
       ctx.fillText(fmtShort(cur), x+3, y+h/2);
     }
     cur = addDays(cur, 7);
@@ -3475,30 +3717,32 @@ function drawWeekLabels(ctx, w, y, h) {
 }
 
 function drawYearLabels(ctx, w, y, h) {
+  const C = canvasColors();
   ctx.font = '500 11px Inter,system-ui'; ctx.textBaseline = 'middle';
   let cur = new Date(state.chartStart.getFullYear(), 0, 1);
   while (cur <= state.chartEnd) {
     const x = dateToX(cur);
     const nextY = new Date(cur.getFullYear()+1, 0, 1);
     const x2 = Math.min(dateToX(nextY), w);
-    ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'center';
+    ctx.fillStyle = C.label; ctx.textAlign = 'center';
     ctx.fillText(cur.getFullYear(), x+(x2-x)/2, y+h/2);
     cur = nextY;
   }
 }
 
 function drawMonthFull(ctx, w, y, h) {
+  const C = canvasColors();
   ctx.font = '400 11px Inter,system-ui'; ctx.textBaseline = 'middle';
   let cur = new Date(state.chartStart); cur.setDate(1);
-  ctx.strokeStyle = '#2d3f52'; ctx.lineWidth = 1;
+  ctx.strokeStyle = C.line; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, y+h-0.5); ctx.lineTo(w, y+h-0.5); ctx.stroke();
   while (cur <= state.chartEnd) {
     const x = dateToX(cur);
     const nextMonth = new Date(cur.getFullYear(), cur.getMonth()+1, 1);
     const x2 = Math.min(dateToX(nextMonth), w);
     const label = MONTHS_ES[cur.getMonth()];
-    ctx.fillStyle = '#2d3f52'; ctx.fillRect(x, y, 1, h);
-    if (x2-x > 20) { ctx.fillStyle='#94a3b8'; ctx.textAlign='center'; ctx.fillText(label, x+(x2-x)/2, y+h/2); }
+    ctx.fillStyle = C.line; ctx.fillRect(x, y, 1, h);
+    if (x2-x > 20) { ctx.fillStyle=C.label; ctx.textAlign='center'; ctx.fillText(label, x+(x2-x)/2, y+h/2); }
     cur = nextMonth;
   }
 }
@@ -3509,6 +3753,7 @@ function drawMonthFull(ctx, w, y, h) {
 // tile (PDF export only): { canvas, k, x0, y0, w, h } draws that region of the chart into
 // tile.canvas at k device px per px, leaving the on-screen chart untouched
 function renderGantt(tile) {
+  const C = canvasColors();
   const canvas = tile ? tile.canvas : document.getElementById('gantt-canvas');
   const wrap   = document.getElementById('gantt-wrap');
   const cw = chartWidth();
@@ -3522,7 +3767,7 @@ function renderGantt(tile) {
     canvas.style.width = cw+'px'; canvas.style.height = ch+'px';
   }
   ctx.clearRect(0, 0, cw, ch);
-  ctx.fillStyle = '#111827'; ctx.fillRect(0, 0, cw, ch);
+  ctx.fillStyle = C.bg; ctx.fillRect(0, 0, cw, ch);
   const pxd = state.pxPerDay;
   const today = new Date();
 
@@ -3531,7 +3776,7 @@ function renderGantt(tile) {
   for (let i = 0; i <= days; i++) {
     const d = addDays(state.chartStart, i);
     if (d.getDay()===0||d.getDay()===6) {
-      ctx.fillStyle='rgba(0,0,0,.18)'; ctx.fillRect(i*pxd, 0, pxd, ch);
+      ctx.fillStyle=C.weekend; ctx.fillRect(i*pxd, 0, pxd, ch);
     }
   }
   // Holiday columns
@@ -3542,15 +3787,15 @@ function renderGantt(tile) {
       const idx = diffDays(state.chartStart, hd);
       if (idx < 0 || idx > totalDaysH) return;
       const hx = idx * pxd;
-      ctx.fillStyle = 'rgba(239,68,68,.12)';
+      ctx.fillStyle = C.holiday;
       ctx.fillRect(hx, 0, pxd, ch);
-      ctx.fillStyle = 'rgba(239,68,68,.4)';
+      ctx.fillStyle = C.holidayEdge;
       ctx.fillRect(hx, 0, 2, ch);
     });
   }
 
   // Vertical grid lines
-  ctx.strokeStyle = 'rgba(255,255,255,.04)'; ctx.lineWidth = 1;
+  ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
   if (state.view==='day') {
     for (let i=0;i<=days;i++) { const x=i*pxd+.5; ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,ch);ctx.stroke(); }
   } else if (state.view==='week') {
@@ -3570,7 +3815,7 @@ function renderGantt(tile) {
   // Sprint start lines
   const sprintsG = getSprints();
   if (sprintsG.length) {
-    ctx.strokeStyle = 'rgba(132,204,22,.2)'; ctx.lineWidth = 1; ctx.setLineDash([3,4]);
+    ctx.strokeStyle = C.sprintLine; ctx.lineWidth = 1; ctx.setLineDash([3,4]);
     sprintsG.forEach(sp => {
       const sd = parseDate(sp.startDate); if (!sd) return;
       const x = Math.round(dateToX(sd)) + .5;
@@ -3581,18 +3826,18 @@ function renderGantt(tile) {
   }
 
   // Horizontal row lines
-  ctx.strokeStyle='rgba(255,255,255,.03)'; ctx.lineWidth=1;
+  ctx.strokeStyle=C.rowLine; ctx.lineWidth=1;
   state.flat.forEach((_,i) => { const y=i*ROW_H+ROW_H-.5; ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cw,y);ctx.stroke(); });
 
   // Row alternating fill
   state.flat.forEach(({task},i) => {
-    if (i%2===0) { ctx.fillStyle='rgba(25,36,52,.6)'; ctx.fillRect(0,i*ROW_H,cw,ROW_H); }
+    if (i%2===0) { ctx.fillStyle=C.rowAlt; ctx.fillRect(0,i*ROW_H,cw,ROW_H); }
   });
 
   // Today dashed line (behind bars)
   const tx = dateToX(today);
   if (tx>=0&&tx<=cw) {
-    ctx.strokeStyle='rgba(239,68,68,.3)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+    ctx.strokeStyle=C.todayDash; ctx.lineWidth=1; ctx.setLineDash([4,4]);
     ctx.beginPath();ctx.moveTo(tx+.5,0);ctx.lineTo(tx+.5,ch);ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -3600,7 +3845,7 @@ function renderGantt(tile) {
   // Dependency arrows (drawn before the bars so bars cover the lines)
   const taskById = {};
   state.flat.forEach(({task},i) => { taskById[task.id]={task,row:i}; });
-  ctx.strokeStyle='rgba(148,163,184,.55)'; ctx.fillStyle='rgba(148,163,184,.55)';
+  ctx.strokeStyle=C.dep; ctx.fillStyle=C.dep;
   ctx.lineWidth=1.5; ctx.setLineDash([]);
   state.flat.forEach(({task},i) => {
     (task.dependencies||[]).forEach(depId => {
@@ -3648,8 +3893,8 @@ function renderGantt(tile) {
         ctx.fillStyle=hexWithAlpha(color,.15); ctx.fill();
         ctx.strokeStyle=color; ctx.lineWidth=2; ctx.stroke();
       }
-      if (outlineLate && isOverdue(task)) { ctx.strokeStyle='#ef4444'; ctx.lineWidth=2; ctx.stroke(); }
-      if (isSelected) { ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke(); }
+      if (outlineLate && isOverdue(task)) { ctx.strokeStyle=C.danger; ctx.lineWidth=2; ctx.stroke(); }
+      if (isSelected) { ctx.strokeStyle=C.selected; ctx.lineWidth=2; ctx.stroke(); }
     } else {
       const barH=isPhase?14:16;
       const barY=rowTop+(ROW_H-barH)/2;
@@ -3664,10 +3909,10 @@ function renderGantt(tile) {
         ctx.fillStyle=hexWithAlpha(color,.5);
         roundRect(ctx,x,barY+barH-4,pw,4,{tl:0,tr:0,bl:r,br:r}); ctx.fill();
       }
-      if (outlineLate && isOverdue(task)) { ctx.strokeStyle='#ef4444';ctx.lineWidth=1.5; roundRect(ctx,x+.75,barY+.75,barW-1.5,barH-1.5,r); ctx.stroke(); }
-      if (isSelected) { ctx.strokeStyle='#fff';ctx.lineWidth=1.5; roundRect(ctx,x,barY,barW,barH,r); ctx.stroke(); }
+      if (outlineLate && isOverdue(task)) { ctx.strokeStyle=C.danger;ctx.lineWidth=1.5; roundRect(ctx,x+.75,barY+.75,barW-1.5,barH-1.5,r); ctx.stroke(); }
+      if (isSelected) { ctx.strokeStyle=C.selected;ctx.lineWidth=1.5; roundRect(ctx,x,barY,barW,barH,r); ctx.stroke(); }
       if (barW>30&&state.pxPerDay>=4) {
-        ctx.fillStyle=isPhase?color:'#e2e8f0';
+        ctx.fillStyle=isPhase?color:C.barText;
         ctx.font=isPhase?'600 11px Inter,system-ui':'400 11px Inter,system-ui';
         ctx.textBaseline='middle'; ctx.textAlign='left';
         const label=task.name+(task.progress>0?` (${task.progress}%)`:'');
@@ -3688,11 +3933,11 @@ function renderGantt(tile) {
     const gx = dateToX(gs) + pxd/2;
     if (gx < 0 || gx > cw) return;
     ctx.save();
-    ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2;
+    ctx.strokeStyle = C.milestone; ctx.lineWidth = 2;
     ctx.setLineDash([4,4]);
     ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,ch); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = '#f59e0b';
+    ctx.fillStyle = C.milestone;
     ctx.beginPath();
     ctx.moveTo(gx,0); ctx.lineTo(gx+16,6); ctx.lineTo(gx,12); ctx.closePath();
     ctx.fill();
@@ -3701,12 +3946,24 @@ function renderGantt(tile) {
 
   // Today line on top
   if (tx>=0&&tx<=cw) {
-    ctx.strokeStyle='rgba(239,68,68,.9)'; ctx.lineWidth=1.5;
+    ctx.strokeStyle=C.today; ctx.lineWidth=1.5;
     ctx.beginPath();ctx.moveTo(tx+.5,0);ctx.lineTo(tx+.5,ch);ctx.stroke();
   }
 }
 
 // ─── Canvas helpers ──────────────────────────────────────
+// Canvas colors of the active theme, from the --cv-* CSS variables (camelCase key → --cv-kebab-case)
+const CANVAS_COLOR_KEYS = ['bg','ruler','line','label','label2','labelWeekend','hint','weekend','weekendRuler',
+  'strip','stripLine','grid','rowLine','rowAlt','phaseText','barText','selected','dep','danger','milestone',
+  'holiday','holidayEdge','today','todayRuler','todayDash','sprintBand','sprintEdge','sprintLine','titleBg','titleFg'];
+function themeVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+function canvasColors() {
+  const c = {};
+  CANVAS_COLOR_KEYS.forEach(k => c[k] = themeVar('--cv-' + k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())));
+  return c;
+}
 function hexWithAlpha(hex, a) {
   const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
   return `rgba(${r},${g},${b},${a})`;
@@ -3790,7 +4047,7 @@ function setupCanvasInteraction() {
       ${isCalc?`<div class="tt-row"><span>(calculado desde subtareas)</span></div>`:''}
       ${!task.isMilestone?`<div class="tt-row">Duración: <span>${task.duration||diffDays(s,en)} días</span></div>`:''}
       ${task.responsible?`<div class="tt-row">Resp.: <span>${esc(task.responsible)}</span></div>`:''}
-      ${!task.isMilestone?`<div class="tt-prog"><div class="tt-prog-fill" style="width:${task.progress}%;background:${task.color||'#84cc16'}"></div></div>
+      ${!task.isMilestone?`<div class="tt-prog"><div class="tt-prog-fill" style="width:${task.progress}%;background:${task.color||'var(--accent)'}"></div></div>
       <div class="tt-row" style="text-align:right;margin-top:2px"><span>${task.progress}% completado</span></div>`:''}
     `;
     tt.style.display = 'block';
