@@ -1684,6 +1684,34 @@ function addDaysToDate(dateStr, n) {
   const d = parseDate(dateStr);
   return d ? fmtDate(addDays(d, n)) : dateStr;
 }
+function addWorkDays(d, n) {
+  // n = total de días laborables; el día de inicio cuenta como día 1
+  if (n <= 0) return new Date(d);
+  const r = new Date(d);
+  let remaining = n - 1;
+  while (remaining > 0) {
+    r.setDate(r.getDate() + 1);
+    const dow = r.getDay();
+    if (dow !== 0 && dow !== 6) remaining--;
+  }
+  return r;
+}
+function addWorkDaysToDate(dateStr, n) {
+  const d = parseDate(dateStr);
+  return d ? fmtDate(addWorkDays(d, n)) : dateStr;
+}
+function diffWorkDays(a, b) {
+  // Cuenta días laborables de a a b, ambos inclusive
+  if (!a || !b || b < a) return 0;
+  let count = 0;
+  const cur = new Date(a);
+  while (cur <= b) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
 const MONTHS_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const MONTHS_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -2339,7 +2367,7 @@ function taskDurationDays(t) {
   const d = t.duration ?? t.durationDays;
   if (d != null && d !== '') return Number(d) || 0;
   const s = parseDate(t.startDate || t.start), e = parseDate(t.endDate || t.end);
-  return s && e ? diffDays(s, e) : '';
+  return s && e ? diffWorkDays(s, e) : '';
 }
 function taskAssigneeNames(t) {
   const names = (t.assigneeIds || t.assignees || []).map(id => getTeamMember(id)?.name).filter(Boolean);
@@ -2482,7 +2510,7 @@ function importXLSX(file) {
       const isMilestone = isTruthyCell(f.milestone) || normKey(f.tipo ?? '') === 'hito';
       let end = parseImportDate(f.end);
       const days = parseInt(f.days);
-      if (!end && start && !isNaN(days) && days >= 0) end = addDaysToDate(start, days);
+      if (!end && start && !isNaN(days) && days >= 0) end = addWorkDaysToDate(start, days);
       if (!name || !start || !end) { skipped++; return; }
       if (isMilestone) end = start;
       if (end < start) { skipped++; return; }
@@ -2496,7 +2524,7 @@ function importXLSX(file) {
       const task = {
         id: 't_' + stamp + '_' + index,
         taskNum: 0, name, startDate: start, endDate: end,
-        duration: isMilestone ? 0 : diffDays(parseDate(start), parseDate(end)),
+        duration: isMilestone ? 0 : diffWorkDays(parseDate(start), parseDate(end)),
         progress: isMilestone ? 0 : progress,
         responsible: assigneeIds.length ? '' : names.join(', '),
         assigneeIds,
@@ -4627,7 +4655,7 @@ function openModal(taskId, opts) {
   document.getElementById('m-name').style.borderColor = '';
   document.getElementById('m-start').value = task.startDate || '';
   document.getElementById('m-end').value = task.endDate || '';
-  document.getElementById('m-duration').value = task.duration != null ? task.duration : diffDays(parseDate(task.startDate)||new Date(), parseDate(task.endDate)||new Date());
+  document.getElementById('m-duration').value = task.duration != null ? task.duration : diffWorkDays(parseDate(task.startDate)||new Date(), parseDate(task.endDate)||new Date());
   document.getElementById('m-progress').value = task.progress || 0;
   document.getElementById('m-progress-val').textContent = (task.progress||0) + '%';
   // Responsable: use team picker if team exists, else free text
@@ -4833,7 +4861,7 @@ function syncDurationFromDates() {
   const s = document.getElementById('m-start').value;
   const e = document.getElementById('m-end').value;
   if (s && e) {
-    const days = diffDays(parseDate(s), parseDate(e));
+    const days = diffWorkDays(parseDate(s), parseDate(e));
     document.getElementById('m-duration').value = Math.max(0, days);
   }
 }
@@ -4842,7 +4870,7 @@ function syncEndDateFromDuration() {
   const s = document.getElementById('m-start').value;
   const dur = parseInt(document.getElementById('m-duration').value) || 0;
   if (s) {
-    document.getElementById('m-end').value = fmtDate(addDays(parseDate(s), dur));
+    document.getElementById('m-end').value = fmtDate(addWorkDays(parseDate(s), dur));
   }
 }
 
