@@ -896,6 +896,10 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
 .ex-btn small{font-size:10px;font-weight:400;color:var(--fg3)}
 .ex-import{width:100%;justify-content:center;display:flex;align-items:center;gap:6px}
 .ex-hint{font-size:11px;color:var(--fg3);line-height:1.5}
+/* ── Import mode dialog (Agregar / Mergear / Sobreescribir) ── */
+.imp-sub{font-size:13px;color:var(--fg)}
+.imp-opts{margin:0;padding-left:18px;font-size:12px;color:var(--fg2);line-height:1.6}
+.imp-opts b{color:var(--fg);font-weight:600}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:600;
   background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 16px;
   font-size:12px;color:var(--fg);box-shadow:0 8px 24px var(--shadow-lg);display:none;max-width:90vw}
@@ -1515,7 +1519,7 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
       </button>
       <input type="file" id="ex-import-input" accept=".xlsx,.xls,.csv" style="display:none"
         onchange="if(this.files[0]) importXLSX(this.files[0]); this.value=''">
-      <div class="ex-hint">Columnas reconocidas: Nombre, Inicio, Fin, Días, Asignados, Fase, Hito, Sprint, Progreso, Depende de. Las tareas se agregan al final del proyecto.</div>
+      <div class="ex-hint">Columnas reconocidas: Nombre, Inicio, Fin, Días, Asignados, Fase, Hito, Sprint, Progreso, Depende de. Las tareas se pueden agregar, mergear o sobreescribir según el modo que elijas.</div>
     </div>
     <div class="cl-footer">
       <button class="btn-primary" onclick="closeExportModal()">Cerrar</button>
@@ -1537,6 +1541,29 @@ textarea.m-input{resize:vertical;min-height:64px;line-height:1.4}
       <button class="btn-ghost" onclick="resolvePullModal('keep')">Mantener fechas</button>
       <button class="btn-ghost" onclick="resolvePullModal('stretch')">Extender hacia antes</button>
       <button class="btn-primary" onclick="resolvePullModal('move')">Adelantar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── IMPORT MODE MODAL ─────────────────────────────────── -->
+<div class="cl-overlay" id="import-mode-overlay" onclick="if(event.target===this) resolveImportMode(null)">
+  <div class="cl-panel" role="dialog" aria-modal="true" aria-labelledby="import-mode-title">
+    <div class="cl-header">
+      <div class="cl-title" id="import-mode-title">Importar tareas</div>
+      <button class="btn-ghost" onclick="resolveImportMode(null)" style="padding:2px 8px">✕</button>
+    </div>
+    <div class="cl-body">
+      <div class="imp-sub" id="import-mode-sub"></div>
+      <ul class="imp-opts">
+        <li><b>Agregar:</b> suma las tareas del archivo al final del proyecto.</li>
+        <li><b>Mergear:</b> actualiza las tareas con el mismo nombre y agrega las que no existen.</li>
+        <li><b>Sobreescribir:</b> reemplaza todas las tareas. Equipo, fases, sprints, feriados, incidentes y cliente se conservan.</li>
+      </ul>
+    </div>
+    <div class="cl-footer">
+      <button class="btn-ghost" onclick="resolveImportMode('overwrite')">Sobreescribir</button>
+      <button class="btn-ghost" onclick="resolveImportMode('merge')">Mergear</button>
+      <button class="btn-primary" id="import-mode-default" onclick="resolveImportMode('append')">Agregar</button>
     </div>
   </div>
 </div>
@@ -2479,9 +2506,29 @@ function isTruthyCell(v) {
   return v === true || ['si', 'yes', 'true', '1'].includes(normKey(v ?? ''));
 }
 
+// Import mode dialog: resolves to 'append' | 'merge' | 'overwrite', or null when cancelled
+let importModeResolve = null;
+function askImportMode(validCount, skipped) {
+  const plural = validCount === 1 ? 'tarea' : 'tareas';
+  const existing = state.project.tasks.length;
+  document.getElementById('import-mode-sub').textContent =
+    `Se encontraron ${validCount} ${plural} en el archivo` +
+    (skipped ? ` (${skipped} ${skipped === 1 ? 'fila omitida' : 'filas omitidas'})` : '') +
+    `. El proyecto ya tiene ${existing} ${existing === 1 ? 'tarea' : 'tareas'}. ¿Cómo querés importarlas?`;
+  document.getElementById('import-mode-overlay').classList.add('open');
+  document.getElementById('import-mode-default').focus();
+  return new Promise(resolve => { importModeResolve = resolve; });
+}
+function resolveImportMode(mode) {
+  document.getElementById('import-mode-overlay').classList.remove('open');
+  const resolve = importModeResolve; importModeResolve = null;
+  if (resolve) resolve(mode);
+}
+
 function importXLSX(file) {
   if (!window.XLSX) { showToast('No se pudo cargar la librería de Excel (SheetJS).', true); return; }
   return withLoading('ex-btn-import', async () => {
+    // ── Stage 1: parse the file into candidates (state.project.tasks is not touched) ──
     // CSV is decoded as UTF-8 text (accents); raw:true keeps DD/MM/YYYY from being misread as a US date
     const wb = /\.csv$/i.test(file.name)
       ? XLSX.read(await file.text(), { type: 'string', raw: true })
@@ -2491,13 +2538,10 @@ function importXLSX(file) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '', raw: true });
 
     ensureProject();
-    pushUndo();
     const phases = getPhases(), team = getTeam(), sprints = getSprints();
-    const prevTasks = state.project.tasks.slice();
-    const stamp = Date.now();
-    const imported = []; // [{ task, f }] for the second pass
-    let added = 0, skipped = 0;
-    rows.forEach((row, index) => {
+    const candidates = [];
+    let skipped = 0;
+    rows.forEach(row => {
       const f = {};
       Object.entries(row).forEach(([k, v]) => {
         const nk = normKey(k);
@@ -2515,58 +2559,109 @@ function importXLSX(file) {
       if (isMilestone) end = start;
       if (end < start) { skipped++; return; }
 
-      const phase = f.phase ? phases.find(p => normKey(p.name) === normKey(f.phase)) : null;
       const names = String(f.assignees ?? '').split(',').map(x => x.trim()).filter(Boolean);
       const assigneeIds = names.map(n => team.find(m => normKey(m.name) === normKey(n))?.id).filter(Boolean);
       let progress = Math.max(0, Math.min(100, Math.round(parseFloat(f.progress) || 0)));
       if (isTruthyCell(f.completada)) progress = 100;
-      const sprint = f.sprint ? sprints.find(sp => normKey(sprintDisplayName(sp)) === normKey(f.sprint)) : null;
-      const task = {
-        id: 't_' + stamp + '_' + index,
-        taskNum: 0, name, startDate: start, endDate: end,
+      candidates.push({
+        name, start, end, isMilestone,
         duration: isMilestone ? 0 : diffWorkDays(parseDate(start), parseDate(end)),
         progress: isMilestone ? 0 : progress,
-        responsible: assigneeIds.length ? '' : names.join(', '),
+        phase: f.phase ? phases.find(p => normKey(p.name) === normKey(f.phase)) || null : null,
         assigneeIds,
-        color: phase?.color || '#3b82f6',
-        parentId: null, phaseId: phase?.id || null,
-        dependencies: [], isMilestone,
+        responsible: assigneeIds.length ? '' : names.join(', '),
+        sprint: f.sprint ? sprints.find(sp => normKey(sprintDisplayName(sp)) === normKey(f.sprint)) || null : null,
         notes: String(f.notes ?? '').trim(),
+        goLive: isTruthyCell(f.goLive),
+        parentName: normKey(f.parentName ?? ''),
+        depNames: String(f.depNames ?? ''),
+        taskNum: parseInt(f.taskNum),
+      });
+    });
+    if (!candidates.length) {
+      showToast(`0 tareas importadas. ${skipped} filas omitidas.`, true);
+      return;
+    }
+
+    // Ask how to import only when the project already has tasks
+    const mode = state.project.tasks.length ? await askImportMode(candidates.length, skipped) : 'append';
+    if (!mode) return;
+
+    // ── Stage 2: apply the candidates according to the mode ──
+    pushUndo();
+    const prevTasks = state.project.tasks.slice();
+    if (mode === 'overwrite') {
+      state.project.tasks = [];
+      state.selectedId = null;
+    }
+    const stamp = Date.now();
+    const applied = []; // [{ task, c }] in file order, for the second pass
+    let added = 0, updated = 0;
+    candidates.forEach((c, index) => {
+      // Merge: first existing task with the same name not already updated by an earlier row
+      const match = mode === 'merge'
+        ? prevTasks.find(t => !t.updatedByImport && normKey(t.name) === normKey(c.name))
+        : null;
+      if (match) {
+        Object.assign(match, {
+          startDate: c.start, endDate: c.end, duration: c.duration, progress: c.progress,
+          isMilestone: c.isMilestone, assigneeIds: c.assigneeIds, responsible: c.responsible,
+          phaseId: c.phase?.id || null, notes: c.notes,
+          updatedByImport: true, // temporary: the second pass keeps its parent and dependencies
+        });
+        if (c.phase) match.color = c.phase.color;
+        if (c.sprint) match.sprintId = c.sprint.id; else delete match.sprintId;
+        if (c.goLive && !getGoLiveTask()) match.isGoLive = true;
+        applied.push({ task: match, c });
+        updated++;
+        return;
+      }
+      const task = {
+        id: 't_' + stamp + '_' + index,
+        taskNum: 0, name: c.name, startDate: c.start, endDate: c.end,
+        duration: c.duration, progress: c.progress,
+        responsible: c.responsible, assigneeIds: c.assigneeIds,
+        color: c.phase?.color || '#3b82f6',
+        parentId: null, phaseId: c.phase?.id || null,
+        dependencies: [], isMilestone: c.isMilestone,
+        notes: c.notes,
       };
       // Only one Go Live per project: later rows marked "Go Live" are ignored
-      if (isTruthyCell(f.goLive) && !getGoLiveTask()) task.isGoLive = true;
-      if (sprint) task.sprintId = sprint.id;
+      if (c.goLive && !getGoLiveTask()) task.isGoLive = true;
+      if (c.sprint) task.sprintId = c.sprint.id;
       state.project.tasks.push(task);
-      imported.push({ task, f });
+      applied.push({ task, c });
       added++;
     });
 
     // Second pass, once every task exists: parent ("Tarea Raiz") and dependencies ("Depende de").
-    // Dependency numbers refer to the file's own ID column; without it, to the project's current numbering.
+    // Dependency numbers refer to the file's own ID column; without it, to the project's numbering.
+    // Fallback pool: append → tasks the project had; overwrite → none; merge → the whole project.
+    const pool = mode === 'append' ? prevTasks : mode === 'merge' ? state.project.tasks : [];
     const byFileNum = {};
-    imported.forEach(({ task, f }) => {
-      const n = parseInt(f.taskNum);
-      if (!isNaN(n)) byFileNum[n] = task.id;
-    });
+    applied.forEach(({ task, c }) => { if (!isNaN(c.taskNum)) byFileNum[c.taskNum] = task.id; });
     const hasFileNums = Object.keys(byFileNum).length > 0;
-    imported.forEach(({ task, f }, i) => {
-      const parentName = normKey(f.parentName ?? '');
-      if (parentName) {
-        // Closest preceding imported row with that name, else an existing task
-        const parent = imported.slice(0, i).reverse().map(x => x.task).find(t => normKey(t.name) === parentName)
-          || prevTasks.find(t => normKey(t.name) === parentName);
+    applied.forEach(({ task, c }, i) => {
+      if (task.updatedByImport) return; // merged tasks keep their parent and dependencies
+      if (c.parentName) {
+        // Closest preceding imported row with that name, else a task from the pool
+        const parent = applied.slice(0, i).reverse().map(x => x.task).find(t => normKey(t.name) === c.parentName)
+          || pool.find(t => t !== task && normKey(t.name) === c.parentName);
         if (parent) task.parentId = parent.id;
       }
-      task.dependencies = [...new Set(String(f.depNames ?? '').split(/[,;]/)
+      task.dependencies = [...new Set(c.depNames.split(/[,;]/)
         .map(x => parseInt(String(x).replace('#', '').trim()))
         .filter(n => !isNaN(n))
-        .map(n => hasFileNums ? byFileNum[n] : prevTasks.find(t => t.taskNum === n)?.id)
+        .map(n => hasFileNums ? byFileNum[n] : pool.find(t => t.taskNum === n)?.id)
         .filter(id => id && id !== task.id))];
     });
+    state.project.tasks.forEach(t => { delete t.updatedByImport; });
 
     renumberTasks();
     rebuildAndRender(true);
-    showToast(`${added} tareas importadas. ${skipped} filas omitidas.`, added === 0);
+    const omitted = `${skipped} filas omitidas.`;
+    if (mode === 'merge') showToast(`Modo merge: ${updated} tareas actualizadas, ${added} nuevas. ${omitted}`);
+    else showToast(`Modo ${mode === 'overwrite' ? 'sobreescribir' : 'agregar'}: ${added} tareas importadas. ${omitted}`);
   });
 }
 
@@ -4961,6 +5056,9 @@ function setupKeyboard() {
     }
     if (e.key==='Escape' && !document.getElementById('filter-menu').hidden) {
       toggleFilterMenu(false); e.preventDefault(); return;
+    }
+    if (e.key==='Escape' && document.getElementById('import-mode-overlay').classList.contains('open')) {
+      resolveImportMode(null); e.preventDefault(); return;
     }
     if (e.key==='Escape') {
       if (!document.getElementById('modal-overlay').hidden) {
